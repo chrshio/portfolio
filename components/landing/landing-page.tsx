@@ -23,7 +23,9 @@ export function LandingPage() {
       router.push("/prototypes");
       return;
     }
-    setError("Incorrect password");
+    if (password.trim().length > 0) {
+      setError("Incorrect password");
+    }
   };
 
   return (
@@ -74,19 +76,17 @@ export function LandingPage() {
 
       {/* Form on top so it’s visible and tappable */}
       <div className="absolute inset-0 z-20 flex flex-col items-center px-6 pt-[calc(30vh-8rem)] text-center">
-        <div className="w-full max-w-md opacity-60" style={{ color: LANDING_TEXT_COLOR }}>
-          <p className="mb-1 text-[12px] font-normal leading-normal">
-            Chris Liu
-          </p>
-          <p className="mb-2 text-[12px] font-normal leading-normal">
-            Product Design
-          </p>
-          <div className="mb-10 max-w-md text-[12px] font-normal leading-normal">
+        <div className="w-full max-w-md">
+          <div className="opacity-60" style={{ color: LANDING_TEXT_COLOR }}>
+            <p className="mb-5 text-[14px] font-normal leading-normal">
+              Chris Liu
+            </p>
+            <div className="mb-10 max-w-md text-[14px] font-normal leading-normal">
             <p className="mb-0">Square, Senior Product Designer</p>
-            <p className="mb-0">2022-2026</p>
+            <p className="mb-0">2022-26</p>
             <p className="mb-0">&nbsp;</p>
             <p className="mb-0">Meta, Product Designer</p>
-            <p className="mb-0">2018-2022</p>
+            <p className="mb-0">2018-22</p>
             <p className="mb-0">&nbsp;</p>
             <Link
               href="https://www.linkedin.com/in/chrisxliu/"
@@ -104,26 +104,44 @@ export function LandingPage() {
             </Link>
             <p className="mb-0">&nbsp;</p>
             <p className="mb-0">Please contact for work samples.</p>
+            </div>
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="h-[45px] w-[157px] rounded-[8px] border-0 bg-black/20 px-4 text-center text-[12px] text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
-              autoComplete="current-password"
-            />
+            <div className="flex h-[45px] w-[200px] items-stretch overflow-hidden rounded-[8px] border-0 bg-black/20 focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.25),0_0_20px_6px_rgba(255,255,255,0.35),0_0_40px_12px_rgba(255,255,255,0.15)]">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className={`shrink-0 border-0 bg-transparent text-center text-[14px] text-white placeholder:text-white focus:outline-none ${password.length > 0 ? "w-[152px] pl-[48px] pr-2" : "w-full min-w-0 px-2"}`}
+                autoComplete="current-password"
+              />
+              {password.length > 0 && (
+                <button
+                  type="submit"
+                  className="flex h-full w-[48px] shrink-0 items-center justify-end pr-2 text-white focus:outline-none focus:ring-inset focus:ring-2 focus:ring-white/30"
+                  style={{ color: LANDING_TEXT_COLOR }}
+                  aria-label="Submit password"
+                >
+                  <svg
+                    className="h-5 w-5 shrink-0"
+                    viewBox="0 0 21 21"
+                    fill="white"
+                    aria-hidden
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10.5 0C16.299 0 21 4.70101 21 10.5C21 16.299 16.299 21 10.5 21C4.70101 21 0 16.299 0 10.5C0 4.70101 4.70101 0 10.5 0ZM11.4443 5.30664C10.9922 4.7851 10.2023 4.72858 9.68066 5.18066C9.15963 5.63272 9.10319 6.42183 9.55469 6.94336L11.5537 9.25H6.70801C6.0178 9.25018 5.45801 9.80975 5.45801 10.5C5.45801 11.1902 6.0178 11.7498 6.70801 11.75H11.5537L9.55469 14.0566C9.10319 14.5782 9.15963 15.3673 9.68066 15.8193C10.2023 16.2714 10.9922 16.2149 11.4443 15.6934L15.2363 11.3184C15.6431 10.8487 15.6431 10.1513 15.2363 9.68164L11.4443 5.30664Z"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
             {error && (
-              <p className="text-[12px] text-red-600">{error}</p>
+              <p className="text-[14px]" style={{ color: LANDING_TEXT_COLOR }}>
+                {error}
+              </p>
             )}
-            <button
-              type="submit"
-              className="mt-1 text-[12px] underline opacity-80"
-              style={{ color: LANDING_TEXT_COLOR }}
-            >
-              Enter
-            </button>
           </form>
         </div>
       </div>
