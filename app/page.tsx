@@ -1,12 +1,5 @@
-import { IPadMock } from "@/components/pos/ipad-mock";
-import { POSScreen } from "@/components/pos/pos-screen";
+import { LandingPage } from "@/components/landing/landing-page";
 
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-[#1a1a1a]">
-      <IPadMock>
-        <POSScreen />
-      </IPadMock>
-    </main>
-  );
+  return <LandingPage />;
 }

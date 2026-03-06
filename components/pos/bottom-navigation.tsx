@@ -34,15 +34,20 @@ export function BottomNavigation() {
         const Icon = item.icon;
         const isActive = activeNav === item.id;
 
+        const isCheckout = item.id === "checkout";
+
         return (
           <button
             key={item.id}
-            onClick={() => setActiveNav(item.id)}
+            type="button"
+            onClick={() => isCheckout && setActiveNav(item.id)}
+            disabled={!isCheckout}
             className={cn(
               "flex items-center gap-2 px-5 py-2.5 rounded-full transition-all",
               isActive
                 ? "bg-[#f0f0f0] text-[#101010]"
-                : "text-[#666666]"
+                : "text-[#666666]",
+              !isCheckout && "pointer-events-none disabled:opacity-100 disabled:cursor-default"
             )}
           >
             <Icon className="w-5 h-5" />

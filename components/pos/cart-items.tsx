@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import type { CartItem } from "@/lib/pos-types";
 import { getModifierGroups, isGroupRequirementUnmet } from "@/lib/modifiers";
@@ -31,14 +31,53 @@ function CartItemRow({
   const [translateX, setTranslateX] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isFullSwipeDeleting, setIsFullSwipeDeleting] = useState(false);
   const startXRef = useRef<number | null>(null);
   const didMoveRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastTranslateXRef = useRef(0);
 
   const REMOVE_WIDTH = 80;
   const SNAP_THRESHOLD = 36;
+  const FULL_SWIPE_THRESHOLD = 120;
+
+  const finishSwipe = useCallback(
+    (clientX: number) => {
+      if (startXRef.current === null) return;
+      const totalDelta = clientX - startXRef.current;
+      startXRef.current = null;
+      setIsDragging(false);
+
+      if (isFullSwipeDeleting) return;
+
+      const currentTx = lastTranslateXRef.current;
+
+      if (currentTx <= -FULL_SWIPE_THRESHOLD && onRemove && containerRef.current) {
+        setIsFullSwipeDeleting(true);
+        const w = containerRef.current.offsetWidth;
+        setTranslateX(-w);
+        lastTranslateXRef.current = -w;
+        setTimeout(() => onRemove(), 280);
+        return;
+      }
+
+      let nowOpen: boolean;
+      if (isOpen) {
+        nowOpen = totalDelta <= SNAP_THRESHOLD;
+      } else {
+        nowOpen = totalDelta < -SNAP_THRESHOLD;
+      }
+
+      setIsOpen(nowOpen);
+      const nextTx = nowOpen ? -REMOVE_WIDTH : 0;
+      setTranslateX(nextTx);
+      lastTranslateXRef.current = nextTx;
+    },
+    [isOpen, isFullSwipeDeleting, onRemove]
+  );
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDraft) return;
+    if (isDraft || isFullSwipeDeleting) return;
     startXRef.current = e.clientX;
     didMoveRef.current = false;
     setIsDragging(true);
@@ -46,28 +85,28 @@ function CartItemRow({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (startXRef.current === null) return;
+    if (startXRef.current === null || isFullSwipeDeleting) return;
     const delta = e.clientX - startXRef.current;
     if (Math.abs(delta) > 4) didMoveRef.current = true;
+    const maxDrag = containerRef.current
+      ? -containerRef.current.offsetWidth
+      : -400;
     const base = isOpen ? -REMOVE_WIDTH : 0;
-    setTranslateX(Math.max(-REMOVE_WIDTH, Math.min(0, base + delta)));
+    const next = Math.max(maxDrag, Math.min(0, base + delta));
+    setTranslateX(next);
+    lastTranslateXRef.current = next;
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (startXRef.current === null) return;
-    const totalDelta = e.clientX - startXRef.current;
-    startXRef.current = null;
-    setIsDragging(false);
+    finishSwipe(e.clientX);
+  };
 
-    let nowOpen: boolean;
-    if (isOpen) {
-      nowOpen = totalDelta <= SNAP_THRESHOLD;
-    } else {
-      nowOpen = totalDelta < -SNAP_THRESHOLD;
-    }
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    finishSwipe(e.clientX);
+  };
 
-    setIsOpen(nowOpen);
-    setTranslateX(nowOpen ? -REMOVE_WIDTH : 0);
+  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (startXRef.current !== null) finishSwipe(e.clientX);
   };
 
   const handleContentClick = () => {
@@ -75,6 +114,7 @@ function CartItemRow({
     if (isOpen) {
       setIsOpen(false);
       setTranslateX(0);
+      lastTranslateXRef.current = 0;
       return;
     }
     onClick?.();
@@ -84,44 +124,62 @@ function CartItemRow({
     e.stopPropagation();
     setIsOpen(false);
     setTranslateX(0);
+    lastTranslateXRef.current = 0;
     onRemove?.();
   };
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         "relative w-full rounded-2xl border-2 overflow-hidden",
         isEditing || isDraft ? "border-[#101010]" : "border-transparent",
         isFaded ? "opacity-40" : "opacity-100"
       )}
     >
-      {/* Red remove button — revealed when content slides left */}
+      {/* Remove button — white when at rest; red when swiped; full-width red when full-swipe deleting */}
       {!isDraft && onRemove && (
-        <div className="absolute right-0 inset-y-0 w-[80px] bg-[#cc0023] flex items-center justify-center">
+        <div
+          className={cn(
+            "absolute right-0 inset-y-0 flex items-center justify-center transition-all duration-200",
+            translateX < 0 ? "bg-[#cc0023]" : "bg-white",
+            isFullSwipeDeleting ? "w-full" : "w-[80px]"
+          )}
+        >
           <button
             onClick={handleRemoveClick}
             className="w-full h-full flex items-center justify-center"
           >
-            <span className="text-white font-semibold text-[15px]">Remove</span>
+            <span
+              className={cn(
+                "font-semibold text-[15px] transition-colors duration-200",
+                translateX < 0 ? "text-white" : "text-[#101010]"
+              )}
+            >
+              Remove
+            </span>
           </button>
         </div>
       )}
 
-      {/* Sliding card content */}
-      <div
-        style={{
-          transform: `translateX(${translateX}px)`,
-          transition: isDragging ? "none" : "transform 0.2s ease-out",
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={handleContentClick}
-        className={cn(
-          "relative bg-white pt-[12px] pb-[12px] px-4",
-          !isDraft && "cursor-pointer"
-        )}
-      >
+      {/* Clipping wrapper so white content fills corners and no red bleeds through */}
+      <div className="overflow-hidden rounded-2xl pointer-events-none">
+        <div
+          style={{
+            transform: `translateX(${translateX}px)`,
+            transition: isDragging ? "none" : "transform 0.2s ease-out",
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerLeave}
+          onClick={handleContentClick}
+          className={cn(
+            "relative bg-white min-h-full w-full pt-[12px] pb-[12px] px-4 pointer-events-auto",
+            !isDraft && "cursor-pointer"
+          )}
+        >
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-base font-medium text-[#101010]">
@@ -154,6 +212,7 @@ function CartItemRow({
             ${(item.price * item.quantity).toFixed(2)}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

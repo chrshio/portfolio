@@ -19,30 +19,7 @@ const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
 
 export function POSScreen() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: "cortado-1",
-      name: "Cortado",
-      price: 5.0,
-      quantity: 1,
-      description: "Equal parts espresso and warm milk. Small, strong, and balanced.",
-      modifiers: ["8oz", "Oat"],
-      note: "",
-      taxes: [],
-      discounts: [],
-      serviceCharges: [],
-    },
-    {
-      id: "croissant-1",
-      name: "Croissant",
-      price: 4.5,
-      quantity: 1,
-      note: "",
-      taxes: [],
-      discounts: [],
-      serviceCharges: [],
-    },
-  ]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftQuantity, setDraftQuantity] = useState(1);
