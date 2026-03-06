@@ -41,25 +41,10 @@ const cashSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Checkout POS',
-  description: 'Point of Sale Checkout System',
-  generator: 'v0.app',
+  title: 'Chris Liu',
+  description: 'Chris Liu is a product designer in Brooklyn, NY.',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/icon.png',
   },
 }
 
