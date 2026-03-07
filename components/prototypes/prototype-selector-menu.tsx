@@ -85,16 +85,16 @@ export function PrototypeSelectorMenu() {
       {/* Menu panel - slides in from left */}
       <div
         className={cn(
-          "fixed left-0 top-0 bottom-0 z-50 w-[240px] transition-transform duration-200 ease-out",
+          "fixed left-0 top-0 bottom-0 z-50 w-[200px] transition-transform duration-200 ease-out",
           "bg-[#0d0d0d] border-r border-white/20",
           showMenu ? "translate-x-0" : "-translate-x-full"
         )}
         onMouseEnter={handleMenuEnter}
         onMouseLeave={handleMenuLeave}
       >
-        <div className="relative h-full w-[180px] pt-[280px] pl-[59px] pointer-events-auto">
+        <div className="relative h-full w-[160px] pt-[280px] pl-[48px] pointer-events-auto">
           {/* PROTOTYPES section */}
-          <p className="mb-4 text-[10px] font-normal uppercase tracking-wide text-white/45">
+          <p className="mb-4 pl-2 text-[11px] font-normal uppercase tracking-wide text-white/45">
             Prototypes
           </p>
           <div className="space-y-1">
@@ -109,12 +109,12 @@ export function PrototypeSelectorMenu() {
                     if (first) router.push(first.path);
                   }}
                   className={cn(
-                    "relative flex items-center gap-3 py-1 pl-0 pr-2 text-left text-[12px] transition-colors",
+                    "relative flex cursor-pointer items-center gap-3 py-1 pl-0 pr-2 text-left text-[14px] transition-colors",
                     isSelected ? "text-white" : "text-white/48 hover:text-white/70"
                   )}
                 >
                   {isSelected && (
-                    <div className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-[4px] h-4 rounded-[39px] bg-white" />
+                    <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white" />
                   )}
                   <span className="pl-2">{project.name}</span>
                 </button>
@@ -125,7 +125,7 @@ export function PrototypeSelectorMenu() {
           {/* VARIANTS section - only for projects with multiple prototypes */}
           {currentProject && currentProject.prototypes.length > 1 && (
             <>
-              <p className="mt-10 mb-4 text-[10px] font-normal uppercase tracking-wide text-white/45">
+              <p className="mt-10 mb-4 pl-2 text-[11px] font-normal uppercase tracking-wide text-white/45">
                 Variants
               </p>
               <div className="space-y-1">
@@ -138,13 +138,13 @@ export function PrototypeSelectorMenu() {
                       onClick={() => p.ready && router.push(p.path)}
                       disabled={!p.ready}
                       className={cn(
-                        "relative flex items-center gap-3 py-1 pl-0 pr-2 text-left text-[12px] transition-colors",
+                        "relative flex items-center gap-3 py-1 pl-0 pr-2 text-left text-[14px] transition-colors",
                         isSelected ? "text-white" : "text-white/48",
                         p.ready ? "hover:text-white/70 cursor-pointer" : "cursor-not-allowed opacity-60"
                       )}
                     >
                       {isSelected && (
-                        <div className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-[4px] h-4 rounded-[39px] bg-white" />
+                        <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white" />
                       )}
                       <span className="pl-2">{p.name}</span>
                     </button>
