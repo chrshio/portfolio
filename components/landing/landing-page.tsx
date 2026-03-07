@@ -20,7 +20,7 @@ export function LandingPage() {
       if (typeof window !== "undefined") {
         sessionStorage.setItem(GATE_STORAGE_KEY, "true");
       }
-      router.push("/prototypes");
+      router.push("/prototypes/checkout-pos/qsr");
       return;
     }
     if (password.trim().length > 0) {

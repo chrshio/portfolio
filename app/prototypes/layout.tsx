@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { isGatePassed } from "@/lib/gate";
+import { PrototypeSelectorMenu } from "@/components/prototypes/prototype-selector-menu";
 
 export default function PrototypesLayout({
   children,
 }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
     setAllowed(isGatePassed());
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     if (allowed === false) router.replace("/");
@@ -27,5 +27,10 @@ export default function PrototypesLayout({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PrototypeSelectorMenu />
+      {children}
+    </>
+  );
 }
