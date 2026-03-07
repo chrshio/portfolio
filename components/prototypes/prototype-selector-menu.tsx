@@ -85,14 +85,14 @@ export function PrototypeSelectorMenu() {
       {/* Menu panel - slides in from left */}
       <div
         className={cn(
-          "fixed left-0 top-0 bottom-0 z-50 w-[200px] transition-transform duration-200 ease-out",
+          "fixed left-0 top-0 bottom-0 z-50 w-[220px] transition-transform duration-200 ease-out",
           "bg-[#0d0d0d] border-r border-white/20",
           showMenu ? "translate-x-0" : "-translate-x-full"
         )}
         onMouseEnter={handleMenuEnter}
         onMouseLeave={handleMenuLeave}
       >
-        <div className="relative h-full w-[160px] pt-[280px] pl-[48px] pointer-events-auto">
+        <div className="relative h-full w-[220px] pt-[280px] pl-[48px] pointer-events-auto">
           {/* PROTOTYPES section */}
           <p className="mb-4 pl-2 text-[11px] font-normal uppercase tracking-wide text-white/45">
             Prototypes
