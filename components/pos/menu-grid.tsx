@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Pencil, ArrowLeft, ChevronRight } from "lucide-react";
+import { Search, Book, ArrowLeft, ChevronRight } from "lucide-react";
 import { MenuTile } from "./menu-tile";
 import type { Tile, TabType, MenuItem, MenuCategory } from "@/lib/pos-types";
 import {
@@ -104,14 +104,14 @@ export function MenuGrid({ onAddItem }: MenuGridProps) {
           <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors">
             <Search className="w-5 h-5 text-[#101010]" />
           </button>
-          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors">
-            <Pencil className="w-5 h-5 text-[#101010]" />
+          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors" aria-label="Menu">
+            <Book className="w-5 h-5 text-[#101010]" />
           </button>
         </div>
       </div>
 
       {/* Scrollable grid */}
-      <div className="flex-1 overflow-y-auto pl-4 pr-6 pb-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide pl-4 pr-6 pb-4">
         <div className="grid grid-cols-5 gap-3">
           {gridTiles.map((tile) => (
             <MenuTile key={tile.id} tile={tile} onClick={handleTileClick} />

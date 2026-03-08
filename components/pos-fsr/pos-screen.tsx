@@ -1,0 +1,413 @@
+"use client";
+
+import { useState, useCallback, useEffect, useRef } from "react";
+import { AlertCircle, X } from "lucide-react";
+import { StatusBar } from "@/components/pos/status-bar";
+import { MenuGridFSR } from "@/components/pos-fsr/menu-grid";
+import { CourseCartSection } from "@/components/pos-fsr/course-cart-section";
+import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
+import { ItemAddPanel } from "@/components/pos/item-add-panel";
+import { BottomNavigation } from "@/components/pos/bottom-navigation";
+import type { CartItem, MenuItem } from "@/lib/pos-types";
+import {
+  getDefaultModifiers,
+  getModifierPriceDelta,
+} from "@/lib/modifiers";
+import { getMenuItemByIdFSR } from "@/lib/menu-library-fsr";
+
+const TAX_RATE = 0.05;
+const ADD_DRAFT_ID = "__draft_add__";
+const DEFAULT_COVER_COUNT = 4;
+
+function buildSeatOptions(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `seat-${i + 1}`,
+    label: `Seat ${i + 1}`,
+  }));
+}
+
+export function POSScreenFSR() {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [activeCourseId, setActiveCourseId] = useState("apps");
+  const [courseHolds, setCourseHolds] = useState<Record<string, boolean>>({
+    "straight-fire": false,
+    apps: false,
+    mains: true,
+    desserts: true,
+  });
+
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [draftQuantity, setDraftQuantity] = useState(1);
+  const [draftModifiers, setDraftModifiers] = useState<string[]>([]);
+  const [draftOptions, setDraftOptions] = useState<DraftItemOptions>({
+    note: "",
+    fulfillmentMethod: "for-here",
+    taxes: [],
+    discounts: [],
+    serviceCharges: [],
+  });
+
+  const [addingItem, setAddingItem] = useState<MenuItem | null>(null);
+  const [addDraftQuantity, setAddDraftQuantity] = useState(1);
+  const [addDraftModifiers, setAddDraftModifiers] = useState<string[]>([]);
+  const [addDraftOptions, setAddDraftOptions] = useState<DraftItemOptions>({
+    note: "",
+    fulfillmentMethod: "for-here",
+    taxes: [],
+    discounts: [],
+    serviceCharges: [],
+  });
+
+  const [coverCount] = useState(DEFAULT_COVER_COUNT);
+  const seatOptions = buildSeatOptions(coverCount);
+  const [addDraftSeatId, setAddDraftSeatId] = useState<string | null>(null);
+  const [editDraftSeatId, setEditDraftSeatId] = useState<string | null>(null);
+
+  const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
+  const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
+  const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
+
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastRafRef = useRef<number | null>(null);
+  const isEditingMode = editingItemId != null;
+
+  useEffect(() => {
+    if (addToastMessage) {
+      toastRafRef.current = requestAnimationFrame(() => {
+        toastRafRef.current = requestAnimationFrame(() => setToastVisible(true));
+      });
+    } else {
+      setToastVisible(false);
+    }
+    return () => {
+      if (toastRafRef.current != null) cancelAnimationFrame(toastRafRef.current);
+    };
+  }, [addToastMessage]);
+
+  useEffect(() => {
+    if (!addToastMessage) return;
+    const t = setTimeout(() => setAddToastMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [addToastMessage]);
+
+  const draftCartItem: CartItem | null =
+    addingItem && !isEditingMode
+      ? {
+          id: ADD_DRAFT_ID,
+          name: addingItem.name,
+          price: addingItem.price,
+          quantity: addDraftQuantity,
+          description: addingItem.description,
+          modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+          courseId: activeCourseId,
+          seatId: addDraftSeatId ?? undefined,
+        }
+      : null;
+
+  const editingDraftItem: CartItem | null = editingItemId
+    ? (() => {
+        const base = cartItems.find((item) => item.id === editingItemId);
+        if (!base) return null;
+        return {
+          ...base,
+          quantity: draftQuantity,
+          modifiers: draftModifiers.length ? draftModifiers : undefined,
+          note: draftOptions.note || undefined,
+          fulfillmentMethod: draftOptions.fulfillmentMethod,
+          taxes: draftOptions.taxes,
+          discounts: draftOptions.discounts,
+          serviceCharges: draftOptions.serviceCharges,
+          seatId: editDraftSeatId ?? undefined,
+        };
+      })()
+    : null;
+
+  const displayItems = editingDraftItem
+    ? cartItems.map((item) => (item.id === editingDraftItem.id ? editingDraftItem : item))
+    : draftCartItem
+      ? [...cartItems, draftCartItem]
+      : cartItems;
+
+  const subtotal = displayItems.reduce(
+    (sum, item) =>
+      sum +
+      (item.price + getModifierPriceDelta(item, item.modifiers ?? [])) *
+        item.quantity,
+    0
+  );
+  const tax = subtotal * TAX_RATE;
+  const total = subtotal + tax;
+
+  const handleMenuItemSelect = useCallback((item: MenuItem) => {
+    setEditingItemId(null);
+    setEditScrollSignal(null);
+    setAddingItem(item);
+    setAddDraftQuantity(1);
+    setAddDraftModifiers(getDefaultModifiers(item));
+    setAddDraftSeatId(null);
+    setAddDraftOptions({ note: "", fulfillmentMethod: "for-here", taxes: [], discounts: [], serviceCharges: [] });
+  }, []);
+
+  const handleAddConfirm = useCallback(() => {
+    if (!addingItem) return;
+    const uniqueId = `${addingItem.id}-${Date.now()}`;
+    setCartItems((prev) => [
+      ...prev,
+      {
+        id: uniqueId,
+        name: addingItem.name,
+        price: addingItem.price,
+        quantity: addDraftQuantity,
+        description: addingItem.description,
+        modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+        note: addDraftOptions.note || undefined,
+        fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+        taxes: addDraftOptions.taxes,
+        discounts: addDraftOptions.discounts,
+        serviceCharges: addDraftOptions.serviceCharges,
+        courseId: activeCourseId,
+        seatId: addDraftSeatId ?? undefined,
+      },
+    ]);
+    setAddingItem(null);
+    setAddDraftSeatId(null);
+  }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, activeCourseId, addDraftSeatId]);
+
+  const handleAddCancel = useCallback(() => {
+    setAddingItem(null);
+    setAddDraftSeatId(null);
+    setAddToastMessage(null);
+    setAddScrollSignal(null);
+  }, []);
+
+  const handleItemClick = useCallback(
+    (id: string) => {
+      const item = cartItems.find((i) => i.id === id);
+      if (!item) return;
+      setAddingItem(null);
+      setAddDraftSeatId(null);
+      setAddToastMessage(null);
+      setAddScrollSignal(null);
+      setEditingItemId(id);
+      setEditScrollSignal(null);
+      setDraftQuantity(item.quantity);
+      setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
+      setEditDraftSeatId(item.seatId ?? null);
+      setDraftOptions({
+        note: item.note ?? "",
+        fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
+        taxes: item.taxes ?? [],
+        discounts: item.discounts ?? [],
+        serviceCharges: item.serviceCharges ?? [],
+      });
+    },
+    [cartItems]
+  );
+
+  const handleRequirementClick = useCallback(
+    (itemId: string, groupId: string) => {
+      if (addingItem && itemId === ADD_DRAFT_ID) {
+        setAddScrollSignal({ groupId, nonce: Date.now() });
+        return;
+      }
+      const item = cartItems.find((i) => i.id === itemId);
+      if (!item) return;
+      setAddingItem(null);
+      setAddDraftSeatId(null);
+      setAddToastMessage(null);
+      setAddScrollSignal(null);
+      if (editingItemId !== itemId) {
+        setEditingItemId(itemId);
+        setDraftQuantity(item.quantity);
+        setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
+        setEditDraftSeatId(item.seatId ?? null);
+        setDraftOptions({
+          note: item.note ?? "",
+          fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
+          taxes: item.taxes ?? [],
+          discounts: item.discounts ?? [],
+          serviceCharges: item.serviceCharges ?? [],
+        });
+      }
+      setEditScrollSignal({ groupId, nonce: Date.now() });
+    },
+    [addingItem, cartItems, editingItemId]
+  );
+
+  const handleEditCancel = useCallback(() => {
+    setEditingItemId(null);
+    setEditScrollSignal(null);
+  }, []);
+
+  const handleEditDone = useCallback(() => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === editingItemId
+          ? {
+              ...item,
+              quantity: draftQuantity,
+              modifiers: draftModifiers,
+              note: draftOptions.note || undefined,
+              fulfillmentMethod: draftOptions.fulfillmentMethod,
+              taxes: draftOptions.taxes,
+              discounts: draftOptions.discounts,
+              serviceCharges: draftOptions.serviceCharges,
+              seatId: editDraftSeatId ?? undefined,
+            }
+          : item
+      )
+    );
+    setEditingItemId(null);
+    setEditScrollSignal(null);
+  }, [editingItemId, draftQuantity, draftModifiers, draftOptions, editDraftSeatId]);
+
+  const handleModifiersChange = useCallback((modifiers: string[]) => {
+    setDraftModifiers(modifiers);
+  }, []);
+
+  const handleOptionsChange = useCallback((options: DraftItemOptions) => {
+    setDraftOptions(options);
+  }, []);
+
+  const handleCompItem = useCallback(() => {
+    console.log("Comp item:", editingItemId);
+  }, [editingItemId]);
+
+  const handleRemoveItem = useCallback(() => {
+    setCartItems((prev) => prev.filter((item) => item.id !== editingItemId));
+    setEditingItemId(null);
+    setEditScrollSignal(null);
+  }, [editingItemId]);
+
+  const handleRemoveCartItem = useCallback((id: string) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    if (editingItemId === id) {
+      setEditingItemId(null);
+    }
+  }, [editingItemId]);
+
+  const handleClearCart = useCallback(() => {
+    setCartItems([]);
+    setEditingItemId(null);
+    setAddingItem(null);
+  }, []);
+
+  const handleCourseHoldToggle = useCallback((courseId: string) => {
+    setCourseHolds((prev) => ({ ...prev, [courseId]: !prev[courseId] }));
+  }, []);
+
+  const handleActiveCourseChange = useCallback((courseId: string) => {
+    setActiveCourseId(courseId);
+    setEditingItemId(null);
+    setEditScrollSignal(null);
+    setAddingItem(null);
+    setAddToastMessage(null);
+    setAddScrollSignal(null);
+  }, []);
+
+  const handleSend = useCallback(() => {
+    console.log("Sending order to kitchen...", cartItems);
+  }, [cartItems]);
+
+  const handlePrint = useCallback(() => {
+    console.log("Printing...", cartItems);
+  }, [cartItems]);
+
+  const handlePay = useCallback(() => {
+    console.log("Processing payment...", { subtotal, tax, total });
+  }, [subtotal, tax, total]);
+
+  const editingItem = cartItems.find((i) => i.id === editingItemId) ?? null;
+
+  return (
+    <div className="relative flex flex-col h-full w-full bg-black">
+      <StatusBar />
+
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          {editingItem ? (
+            <ItemEditPanel
+              item={editingItem}
+              draftQuantity={draftQuantity}
+              draftModifiers={draftModifiers}
+              draftOptions={draftOptions}
+              onQuantityChange={setDraftQuantity}
+              onModifiersChange={handleModifiersChange}
+              onOptionsChange={handleOptionsChange}
+              onCompItem={handleCompItem}
+              onRemoveItem={handleRemoveItem}
+              scrollSignal={editScrollSignal}
+              seats={seatOptions}
+              draftSeatId={editDraftSeatId}
+              onSeatChange={setEditDraftSeatId}
+            />
+          ) : addingItem ? (
+            <ItemAddPanel
+              item={addingItem}
+              onCancel={handleAddCancel}
+              draftQuantity={addDraftQuantity}
+              draftModifiers={addDraftModifiers}
+              draftOptions={addDraftOptions}
+              onQuantityChange={setAddDraftQuantity}
+              onModifiersChange={setAddDraftModifiers}
+              onOptionsChange={setAddDraftOptions}
+              scrollSignal={addScrollSignal}
+              seats={seatOptions}
+              draftSeatId={addDraftSeatId}
+              onSeatChange={setAddDraftSeatId}
+            />
+          ) : (
+            <MenuGridFSR onAddItem={handleMenuItemSelect} />
+          )}
+        </div>
+
+        <div className="w-[320px] flex-shrink-0">
+          <CourseCartSection
+            items={displayItems}
+            activeCourseId={activeCourseId}
+            onActiveCourseChange={handleActiveCourseChange}
+            courseHolds={courseHolds}
+            onCourseHoldToggle={handleCourseHoldToggle}
+            editingItemId={editingItemId}
+            onItemClick={handleItemClick}
+            onRequirementClick={handleRequirementClick}
+            onEditCancel={handleEditCancel}
+            onEditDone={handleEditDone}
+            isAddMode={!!addingItem && !isEditingMode}
+            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+            onAddCancel={handleAddCancel}
+            onAdd={handleAddConfirm}
+            onRemoveItem={handleRemoveCartItem}
+            onClearCart={handleClearCart}
+            onSend={handleSend}
+            onPrint={handlePrint}
+            onPay={handlePay}
+            getMenuItemById={getMenuItemByIdFSR}
+            coverCount={coverCount}
+            seatingEnabled
+          />
+        </div>
+      </div>
+
+      <BottomNavigation />
+
+      {addToastMessage && (
+        <div
+          className="absolute left-1/2 z-50 w-[600px] max-w-[calc(100%-32px)] transition-transform duration-300 ease-out"
+          style={{
+            bottom: "78px",
+            transform: `translateX(-50%) translateY(${toastVisible ? "0" : "200%"})`,
+          }}
+        >
+          <div className="flex items-center gap-3 bg-[#cc0023] px-4 py-4 rounded-lg shadow-xl">
+            <AlertCircle className="w-6 h-6 text-white shrink-0" />
+            <p className="flex-1 text-[16px] text-white leading-6">{addToastMessage}</p>
+            <button onClick={() => setAddToastMessage(null)} className="shrink-0">
+              <X className="w-6 h-6 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

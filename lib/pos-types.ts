@@ -44,6 +44,29 @@ export interface MenuGroup {
   tiles: Tile[];
 }
 
+/** Combo slot: fixed = one specific item (can only modify); category = pick one from category. */
+export interface ComboSlot {
+  slotId: string;
+  label: string;
+  type: "fixed" | "category";
+  /** Set when type === "fixed". */
+  itemId?: string;
+  /** Set when type === "category" (e.g. "sides", "drinks"). */
+  categoryId?: string;
+  /** When type === "category", optional extra cost per item (itemId -> dollars). Shown as secondary "+$X.00" in picker. */
+  itemPriceAdjustments?: Record<string, number>;
+}
+
+export interface ComboDefinition {
+  slots: ComboSlot[];
+}
+
+/** Per-slot selection for combo items: item id and optional modifiers for that line. */
+export interface ComboSlotSelection {
+  itemId: string;
+  modifiers?: string[];
+}
+
 export interface CartItem {
   id: string;
   name: string;
@@ -51,11 +74,19 @@ export interface CartItem {
   quantity: number;
   description?: string;
   modifiers?: string[];
+  /** Combo meal slot selections: slotId -> { itemId, modifiers }. */
+  comboSelections?: Record<string, ComboSlotSelection>;
+  /** Original menu item id (e.g. tenders-meal); used to look up combo definition when editing. */
+  menuItemId?: string;
   note?: string;
   fulfillmentMethod?: string;
   taxes?: string[];
   discounts?: string[];
   serviceCharges?: string[];
+  /** FSR coursing: which course this item belongs to. */
+  courseId?: string;
+  /** FSR seating: which seat this item is for (e.g. "seat-1"). */
+  seatId?: string;
 }
 
 export interface Cart {
@@ -64,6 +95,22 @@ export interface Cart {
   tax: number;
   total: number;
 }
+
+// --- Coursing (FSR) ---
+
+export interface CourseDefinition {
+  id: string;
+  label: string;
+  /** When false (Straight fire), no fire/hold toggle — items fire immediately. */
+  holdable: boolean;
+}
+
+export const FSR_COURSES: CourseDefinition[] = [
+  { id: "straight-fire", label: "Straight fire", holdable: false },
+  { id: "apps", label: "Apps", holdable: true },
+  { id: "mains", label: "Mains", holdable: true },
+  { id: "desserts", label: "Desserts", holdable: true },
+];
 
 // Tab Types
 export type TabType = 'keypad' | 'library' | 'cafe';

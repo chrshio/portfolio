@@ -11,6 +11,9 @@ interface CartFooterProps {
   onAddCancel?: () => void;
   onAdd?: () => void;
   addDisabled?: boolean;
+  isAddSlotDetailMode?: boolean;
+  onAddSlotCancel?: () => void;
+  onAddSlotDone?: () => void;
 }
 
 export function CartFooter({
@@ -24,7 +27,29 @@ export function CartFooter({
   onAddCancel,
   onAdd,
   addDisabled,
+  isAddSlotDetailMode,
+  onAddSlotCancel,
+  onAddSlotDone,
 }: CartFooterProps) {
+  if (isAddSlotDetailMode) {
+    return (
+      <div className="flex items-center gap-3 px-0 py-4">
+        <button
+          onClick={onAddSlotCancel}
+          className="flex-1 py-4 rounded-full bg-[#f0f0f0] text-[#101010] font-medium text-base transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onAddSlotDone}
+          className="flex-1 py-4 rounded-full bg-[#101010] text-[#ffffff] font-medium text-base transition-colors"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
+
   if (isAddMode) {
     return (
       <div className="flex items-center gap-3 px-0 py-4">

@@ -2,11 +2,11 @@ import type { Tile, MenuGroup, MenuItem, MenuCategory, ActionTile, DiscountTile 
 
 // Featured Items with images
 export const featuredItems: MenuItem[] = [
-  { id: 'cappuccino', name: 'Cappuccino', price: 6.00, type: 'item', image: '/cappuccino.jpg', description: 'Equal parts espresso, steamed milk, and thick foam. Rich and velvety.' },
-  { id: 'matcha', name: 'Matcha', price: 6.50, type: 'item', image: '/matcha.jpg', description: 'Ceremonial-grade matcha whisked with your choice of milk. Earthy and smooth.' },
-  { id: 'iced-coffee', name: 'Iced coffee', price: 5.00, type: 'item', image: '/iced-coffee.jpg', description: 'Cold-brewed overnight for a smooth, low-acidity cup. Served over ice.' },
-  { id: 'latte', name: 'Latte', price: 6.00, type: 'item', image: '/latte.jpg', description: 'Double espresso topped with silky steamed milk and a light layer of foam.' },
-  { id: 'espresso', name: 'Espresso', price: 4.00, type: 'item', image: '/espresso.jpg', description: 'A concentrated shot of our house blend, pulled fresh to order.' },
+  { id: 'cappuccino', name: 'Cappuccino', price: 6.00, type: 'item', image: '/cappuccino.png', description: 'Equal parts espresso, steamed milk, and thick foam. Rich and velvety.' },
+  { id: 'matcha', name: 'Matcha', price: 6.50, type: 'item', image: '/matcha.png', description: 'Ceremonial-grade matcha whisked with your choice of milk. Earthy and smooth.' },
+  { id: 'iced-coffee', name: 'Iced coffee', price: 5.00, type: 'item', image: '/iced-coffee.png', description: 'Cold-brewed overnight for a smooth, low-acidity cup. Served over ice.' },
+  { id: 'latte', name: 'Latte', price: 6.00, type: 'item', image: '/latte.png', description: 'Double espresso topped with silky steamed milk and a light layer of foam.' },
+  { id: 'espresso', name: 'Espresso', price: 4.00, type: 'item', image: '/espresso.png', description: 'A concentrated shot of our house blend, pulled fresh to order.' },
 ];
 
 // Tea items (light gray background)

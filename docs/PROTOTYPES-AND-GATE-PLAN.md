@@ -115,3 +115,10 @@ No changes to existing POS components (e.g. `POSScreen`, `IPadMock`); they’re 
 ## Can we do this?
 
 Yes. This fits the current Next.js app and doesn’t require new infra for the first version. If you want, next step is to implement the landing page, config, and route moves (and optionally middleware for cookie-based gate).
+
+---
+
+## Agent / development notes
+
+- **Add panel ↔ Edit panel parity**  
+  When changing the **Item Add Panel** (`components/pos/item-add-panel.tsx`) or the **Item Edit Panel** (`components/pos/item-edit-panel.tsx`), apply the same styling, layout, and UX changes to the other panel so they stay in sync. This includes header layout, modifier tiles (e.g. `active:scale-[0.97]`), section labels, typography, and options/note/fulfillment UI.

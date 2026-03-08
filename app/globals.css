@@ -115,6 +115,15 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Hide scrollbar while keeping scroll behavior */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

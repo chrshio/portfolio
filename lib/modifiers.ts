@@ -32,10 +32,11 @@ export const BEVERAGE_MODIFIER_GROUPS: ModifierGroup[] = [
   {
     id: "variations",
     name: "Variations",
+    minSelect: 1,
     maxSelect: 1,
     options: [
-      { id: "8oz", name: "8oz", price: 5.5 },
-      { id: "12oz", name: "12oz", price: 6.0 },
+      { id: "8oz", name: "8oz" },
+      { id: "12oz", name: "12oz", price: 2 },
     ],
   },
   {
@@ -55,6 +56,7 @@ export const BEVERAGE_MODIFIER_GROUPS: ModifierGroup[] = [
   {
     id: "temperature",
     name: "Temperature",
+    minSelect: 1,
     maxSelect: 1,
     options: [
       { id: "Hot", name: "Hot" },
@@ -86,7 +88,51 @@ export const BAKERY_MODIFIER_GROUPS: ModifierGroup[] = [
   },
 ];
 
+/** Shared spice level group (Nashville Sandwich, Chicken and Waffles, etc.). */
+export const SPICE_LEVEL_MODIFIER_GROUP: ModifierGroup = {
+  id: "spice-level",
+  name: "Spice level",
+  minSelect: 1,
+  maxSelect: 1,
+  options: [
+    { id: "spice-naked", name: "Naked" },
+    { id: "spice-mild", name: "Mild" },
+    { id: "spice-medium", name: "Medium" },
+    { id: "spice-hot", name: "Hot" },
+  ],
+};
+
+/** Nashville Sandwich (QSR): spice level required; remove toppings and on side optional. */
+export const NASHVILLE_SANDWICH_MODIFIER_GROUPS: ModifierGroup[] = [
+  SPICE_LEVEL_MODIFIER_GROUP,
+  {
+    id: "remove-toppings",
+    name: "Remove Toppings",
+    options: [
+      { id: "remove-no-coleslaw", name: "No Coleslaw" },
+      { id: "remove-no-pickles", name: "No Pickles" },
+      { id: "remove-no-house-sauce", name: "No House Sauce" },
+    ],
+  },
+  {
+    id: "on-side",
+    name: "On Side",
+    options: [
+      { id: "side-coleslaw", name: "Coleslaw On Side" },
+      { id: "side-pickles", name: "Pickles On Side" },
+      { id: "side-house-sauce", name: "House Sauce On Side" },
+    ],
+  },
+];
+
+/** Chicken and Waffles (QSR): spice level required only. */
+export const CHICKEN_AND_WAFFLES_MODIFIER_GROUPS: ModifierGroup[] = [
+  SPICE_LEVEL_MODIFIER_GROUP,
+];
+
 export function getModifierGroups(item: { name: string }): ModifierGroup[] {
+  if (item.name === "Nashville Sandwich") return NASHVILLE_SANDWICH_MODIFIER_GROUPS;
+  if (item.name === "Chicken and Waffles") return CHICKEN_AND_WAFFLES_MODIFIER_GROUPS;
   const isBeverage = BEVERAGE_KEYWORDS.some((kw) =>
     item.name.toLowerCase().includes(kw)
   );
@@ -133,4 +179,69 @@ export function computeNewModifiers(
 /** Returns true if any modifier group has a required selection (minSelect > 0). */
 export function itemRequiresSelection(item: { name: string }): boolean {
   return getModifierGroups(item).some((g) => g.minSelect && g.minSelect > 0);
+}
+
+/** Returns default modifier ids: only the variations group gets first option as default; other required groups (e.g. milk) have no default. */
+export function getDefaultModifiers(item: { name: string }): string[] {
+  const groups = getModifierGroups(item);
+  return groups
+    .filter(
+      (g) =>
+        g.id === "variations" &&
+        g.minSelect &&
+        g.minSelect > 0 &&
+        g.options.length > 0
+    )
+    .map((g) => g.options[0].id);
+}
+
+/** Extra price from selected modifiers (variation deltas + add-on prices). */
+export function getModifierPriceDelta(
+  item: { name: string },
+  modifierIds: string[]
+): number {
+  const groups = getModifierGroups(item);
+  let delta = 0;
+  for (const id of modifierIds) {
+    for (const group of groups) {
+      const option = group.options.find((o) => o.id === id);
+      if (option?.price != null) delta += option.price;
+    }
+  }
+  return delta;
+}
+
+/** For variations group: first option shows no price (base); others show +$delta. */
+export function getVariationOptionPriceDisplay(
+  group: ModifierGroup,
+  option: ModifierOption,
+  optionIndex: number
+): string | null {
+  if (group.id !== "variations") return null;
+  if (optionIndex === 0) return null;
+  if (option.price == null) return null;
+  return `+$${option.price.toFixed(2)}`;
+}
+
+/** Resolve modifier ids to display: variant (variations group) and comma-separated other modifier names. */
+export function getModifierDisplay(
+  item: { name: string },
+  modifierIds: string[]
+): { variantName: string | null; modifierNames: string[] } {
+  const groups = getModifierGroups(item);
+  let variantName: string | null = null;
+  const modifierNames: string[] = [];
+  for (const id of modifierIds) {
+    for (const group of groups) {
+      const option = group.options.find((o) => o.id === id);
+      if (!option) continue;
+      if (group.id === "variations") {
+        variantName = option.name;
+      } else {
+        modifierNames.push(option.name);
+      }
+      break;
+    }
+  }
+  return { variantName, modifierNames };
 }

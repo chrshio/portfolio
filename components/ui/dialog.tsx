@@ -1,10 +1,12 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useDialogContainer } from '@/components/ui/dialog-container-context'
 
 function Dialog({
   ...props
@@ -19,9 +21,25 @@ function DialogTrigger({
 }
 
 function DialogPortal({
+  children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const containerContext = useDialogContainer()
+  const container =
+    containerContext?.contained && containerContext?.containerRef?.current
+      ? containerContext.containerRef.current
+      : null
+
+  if (container) {
+    return (
+      createPortal(children, container, 'dialog-portal') as React.ReactElement
+    )
+  }
+  return (
+    <DialogPrimitive.Portal data-slot="dialog-portal" {...props}>
+      {children}
+    </DialogPrimitive.Portal>
+  )
 }
 
 function DialogClose({
@@ -34,11 +52,15 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const containerContext = useDialogContainer()
+  const positionClass = containerContext?.contained ? 'absolute' : 'fixed'
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 z-50 bg-black/50',
+        positionClass,
+        'inset-0',
         className,
       )}
       {...props}
@@ -54,13 +76,17 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const containerContext = useDialogContainer()
+  const positionClass = containerContext?.contained ? 'absolute' : 'fixed'
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg',
+          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 z-50 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg',
+          positionClass,
+          'top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]',
           className,
         )}
         {...props}

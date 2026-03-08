@@ -1,11 +1,11 @@
 import { IPadMock } from "@/components/pos/ipad-mock";
-import { POSScreen } from "@/components/pos/pos-screen";
+import { POSScreenQSR } from "@/components/pos-qsr/pos-screen";
 
 export default function CheckoutPOSQSRPage() {
   return (
     <main className="min-h-screen bg-[#1a1a1a]">
       <IPadMock>
-        <POSScreen />
+        <POSScreenQSR />
       </IPadMock>
     </main>
   );

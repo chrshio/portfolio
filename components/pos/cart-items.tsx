@@ -2,15 +2,31 @@
 
 import { useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import type { CartItem } from "@/lib/pos-types";
-import { getModifierGroups, isGroupRequirementUnmet } from "@/lib/modifiers";
+import type { CartItem, MenuItem, ComboDefinition, ComboSlotSelection } from "@/lib/pos-types";
+import {
+  getModifierGroups,
+  isGroupRequirementUnmet,
+  getModifierPriceDelta,
+  getModifierDisplay,
+} from "@/lib/modifiers";
+import { FULFILLMENT_METHODS, DISCOUNT_OPTIONS } from "./item-edit-panel";
 
 interface CartItemsProps {
   items: CartItem[];
   editingItemId?: string | null;
   addingItemId?: string | null;
+  activeComboSlotId?: string | null;
   onItemClick?: (id: string) => void;
+  onRequirementClick?: (itemId: string, groupId: string) => void;
   onRemoveItem?: (id: string) => void;
+  /** Resolve menu item name for combo selection display; required to show combo items in secondary text. */
+  getMenuItemById?: (id: string) => MenuItem | undefined;
+  /** Combo definition for menu item; when provided, combo line items are shown in slot order. */
+  getComboDefinition?: (menuItemId: string) => ComboDefinition | null;
+  /** When true, omit the outer bordered container (e.g. when rendered inside a course container). */
+  bare?: boolean;
+  /** When true, items without seatId show a "Select Seat" missing requirement. */
+  seatingEnabled?: boolean;
 }
 
 function CartItemRow({
@@ -18,15 +34,25 @@ function CartItemRow({
   isEditing,
   isDraft,
   isFaded,
-  onClick,
+  activeComboSlotId,
+  onItemClick,
+  onRequirementClick,
   onRemove,
+  getMenuItemById,
+  getComboDefinition,
+  seatingEnabled,
 }: {
   item: CartItem;
   isEditing: boolean;
   isDraft: boolean;
   isFaded: boolean;
-  onClick?: () => void;
+  activeComboSlotId?: string | null;
+  onItemClick?: (id: string) => void;
+  onRequirementClick?: (itemId: string, groupId: string) => void;
   onRemove?: () => void;
+  getMenuItemById?: (id: string) => MenuItem | undefined;
+  getComboDefinition?: (menuItemId: string) => ComboDefinition | null;
+  seatingEnabled?: boolean;
 }) {
   const [translateX, setTranslateX] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -117,7 +143,7 @@ function CartItemRow({
       lastTranslateXRef.current = 0;
       return;
     }
-    onClick?.();
+    onItemClick?.(item.id);
   };
 
   const handleRemoveClick = (e: React.MouseEvent) => {
@@ -132,7 +158,7 @@ function CartItemRow({
     <div
       ref={containerRef}
       className={cn(
-        "relative w-full rounded-2xl border-2 overflow-hidden",
+        "relative w-full rounded-2xl border-[3px] overflow-hidden",
         isEditing || isDraft ? "border-[#101010]" : "border-transparent",
         isFaded ? "opacity-40" : "opacity-100"
       )}
@@ -176,54 +202,301 @@ function CartItemRow({
           onPointerLeave={handlePointerLeave}
           onClick={handleContentClick}
           className={cn(
-            "relative bg-white min-h-full w-full pt-[12px] pb-[12px] px-4 pointer-events-auto",
-            !isDraft && "cursor-pointer"
+            "relative bg-white min-h-full w-full py-3 px-4 pointer-events-auto",
+            !isDraft && onItemClick && "cursor-pointer"
           )}
         >
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-base font-medium text-[#101010]">
-              {item.name}
-            </p>
-            {item.modifiers && item.modifiers.length > 0 && (
-              <div className="space-y-0">
-                {item.modifiers.map((modifier, index) => (
-                  <p key={index} className="text-sm text-[#888888]">
-                    {modifier}
+        {(() => {
+          const unitPrice =
+            item.price + getModifierPriceDelta(item, item.modifiers ?? []);
+          const totalPrice = unitPrice * item.quantity;
+          const { variantName, modifierNames } = getModifierDisplay(
+            item,
+            item.modifiers ?? []
+          );
+          const hasDiscount = (item.discounts?.length ?? 0) > 0;
+          const appliedDiscounts =
+            item.discounts?.map(
+              (id) => DISCOUNT_OPTIONS.find((d) => d.id === id)
+            ).filter(Boolean) ?? [];
+
+          return (
+            <div className="flex flex-col items-start gap-0 w-full relative">
+              {/* Row 1: Item name × quantity (left) | Total price (right) */}
+              <div className="flex gap-1 items-center leading-5 text-[16px] w-full">
+                <div className="flex-1 flex gap-1 items-center min-w-0">
+                  <p className="font-medium text-[#101010] shrink-0 truncate">
+                    {item.name}
                   </p>
-                ))}
-              </div>
-            )}
-            {getModifierGroups(item)
-              .filter((g) => isGroupRequirementUnmet(g, item.modifiers ?? []))
-              .map((g) => (
-                <p key={g.id} className="text-[12px] font-semibold text-[#005ad9]">
-                  Select {g.minSelect} {g.name}
+                  {item.quantity > 1 && (
+                  <p className="font-normal text-[#666] shrink-0">
+                    × {item.quantity}
+                  </p>
+                )}
+                </div>
+                <p className="font-normal text-[#101010] text-right shrink-0">
+                  ${totalPrice.toFixed(2)}
                 </p>
-              ))
-            }
-          </div>
-          <p
-            className={cn(
-              "text-base text-[#101010]",
-              item.quantity === 1 ? "font-normal" : "font-medium"
-            )}
-          >
-            ${(item.price * item.quantity).toFixed(2)}
-          </p>
-        </div>
+              </div>
+
+              {/* Variant (e.g. 8oz, 12oz) */}
+              {variantName && (
+                <p className="text-[14px] leading-5 text-[#666] w-full">
+                  {variantName}
+                </p>
+              )}
+
+              {/* Combo selections: compact "item1 (mod1, mod2), item2, item3" when not editing a slot; expanded per-slot lines when editing. Order follows combo slot order when getComboDefinition is provided. */}
+              {item.comboSelections &&
+                Object.keys(item.comboSelections).length > 0 &&
+                getMenuItemById &&
+                (() => {
+                  const comboDef = item.menuItemId && getComboDefinition ? getComboDefinition(item.menuItemId) : null;
+                  const selectionEntries: [string, ComboSlotSelection][] = comboDef
+                    ? comboDef.slots
+                        .filter((slot) => item.comboSelections![slot.slotId])
+                        .map((slot) => [slot.slotId, item.comboSelections![slot.slotId]!])
+                    : Object.entries(item.comboSelections!);
+                  if (selectionEntries.length === 0) return null;
+
+                  const editingSlot = !!activeComboSlotId;
+
+                  if (!editingSlot) {
+                    const parts = selectionEntries.map(([, sel]) => {
+                      const slotItem = getMenuItemById!(sel.itemId);
+                      const slotName = slotItem?.name ?? sel.itemId;
+                      const slotModifiers = sel.modifiers ?? [];
+                      const slotDetails = slotItem
+                        ? getModifierDisplay(slotItem, slotModifiers)
+                        : { variantName: undefined, modifierNames: [] as string[] };
+                      const subParts = [
+                        ...(slotDetails.variantName ? [slotDetails.variantName] : []),
+                        ...slotDetails.modifierNames,
+                      ];
+                      return subParts.length > 0 ? `${slotName} (${subParts.join(", ")})` : slotName;
+                    });
+                    return (
+                      <p className="text-[14px] leading-6 text-[#666] w-full">
+                        {parts.join(", ")}
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="w-full flex flex-col">
+                      {selectionEntries.map(([slotId, sel]) => {
+                        const slotItem = getMenuItemById!(sel.itemId);
+                        const slotName = slotItem?.name ?? sel.itemId;
+                        const slotModifiers = sel.modifiers ?? [];
+                        const slotDetails = slotItem
+                          ? getModifierDisplay(slotItem, slotModifiers)
+                          : { variantName: undefined, modifierNames: [] as string[] };
+                        const slotSubLines = [
+                          ...(slotDetails.variantName ? [slotDetails.variantName] : []),
+                          ...slotDetails.modifierNames,
+                        ];
+                        const isActiveSlot = slotId === activeComboSlotId;
+                        const isInactiveWhileEditing = !isActiveSlot;
+
+                        return (
+                          <div key={slotId} className="w-full">
+                            <p
+                              className={cn(
+                                "text-[14px] leading-6 w-full",
+                                isInactiveWhileEditing
+                                  ? "text-[#9b9b9b]"
+                                  : "text-[#101010]"
+                              )}
+                            >
+                              {slotName}
+                            </p>
+                            {slotSubLines.map((line) => (
+                              <p
+                                key={`${slotId}-${line}`}
+                                className={cn(
+                                  "text-[14px] leading-6 w-full pl-4",
+                                  isInactiveWhileEditing
+                                    ? "text-[#b3b3b3]"
+                                    : "text-[#101010]"
+                                )}
+                              >
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+              {/* Seat label when assigned */}
+              {seatingEnabled && item.seatId && (
+                <p className="text-[14px] leading-5 text-[#666] w-full">
+                  {item.seatId.replace("seat-", "Seat ")}
+                </p>
+              )}
+
+              {/* Modifiers (milk, temperature, add-ons) — comma-separated */}
+              {modifierNames.length > 0 && (
+                <p className="text-[14px] leading-5 text-[#666] w-full">
+                  {modifierNames.join(", ")}
+                </p>
+              )}
+
+              {/* Fulfillment: only when not "For here" */}
+              {item.fulfillmentMethod &&
+                item.fulfillmentMethod !== "for-here" && (
+                  <p className="text-[14px] leading-5 text-[#666] w-full">
+                    {
+                      FULFILLMENT_METHODS.find(
+                        (m) => m.id === item.fulfillmentMethod
+                      )?.name
+                    }
+                  </p>
+                )}
+
+              {/* Item note — italic, truncate */}
+              {item.note && item.note.trim() && (
+                <p className="text-[14px] leading-5 text-[#666] italic truncate w-full max-w-full">
+                  {item.note.trim()}
+                </p>
+              )}
+
+              {/* Discount(s) — "Name (X% off)" */}
+              {appliedDiscounts.map((d) =>
+                d ? (
+                  <p
+                    key={d.id}
+                    className="text-[14px] leading-5 text-[#666] w-full"
+                  >
+                    {d.type === "percentage"
+                      ? `${d.name} (${d.value}% off)`
+                      : `${d.name} ($${d.value} off)`}
+                  </p>
+                ) : null
+              )}
+
+              {/* Original price (strikethrough) when discount applied — aligned with second row */}
+              {hasDiscount && (
+                <p className="absolute right-4 top-9 text-[14px] leading-5 text-[#666] line-through text-right">
+                  ${(unitPrice * item.quantity).toFixed(2)}
+                </p>
+              )}
+
+              {/* Incomplete required selections (modifiers + combo slots) */}
+              {(() => {
+                const unmetGroups = getModifierGroups(item).filter((g) =>
+                  isGroupRequirementUnmet(g, item.modifiers ?? [])
+                );
+
+                const comboDef = item.menuItemId && getComboDefinition
+                  ? getComboDefinition(item.menuItemId)
+                  : null;
+                const unmetSlots = comboDef
+                  ? comboDef.slots.filter(
+                      (slot) =>
+                        slot.type === "category" &&
+                        !item.comboSelections?.[slot.slotId]?.itemId
+                    )
+                  : [];
+
+                const missingSeat = seatingEnabled && !item.seatId;
+
+                if (unmetGroups.length === 0 && unmetSlots.length === 0 && !missingSeat) return null;
+
+                const totalCount = unmetGroups.length + unmetSlots.length + (missingSeat ? 1 : 0);
+                let runningIndex = 0;
+
+                return (
+                  <div className="flex flex-wrap items-center gap-x-1 text-[12px] font-semibold text-[#005ad9] w-full">
+                    {missingSeat && (() => {
+                      const idx = runningIndex++;
+                      return (
+                        <span key="__seat__" className="inline-flex items-center">
+                          <button
+                            type="button"
+                            onPointerDown={(e) => { e.stopPropagation(); }}
+                            onPointerMove={(e) => { e.stopPropagation(); }}
+                            onPointerUp={(e) => { e.stopPropagation(); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRequirementClick?.(item.id, "__seat__");
+                            }}
+                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-inherit appearance-none cursor-pointer"
+                          >
+                            Select Seat
+                          </button>
+                          {idx < totalCount - 1 && <span>,</span>}
+                        </span>
+                      );
+                    })()}
+                    {unmetGroups.map((group) => {
+                      const idx = runningIndex++;
+                      return (
+                        <span key={group.id} className="inline-flex items-center">
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onPointerMove={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRequirementClick?.(item.id, group.id);
+                            }}
+                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-inherit appearance-none cursor-pointer"
+                          >
+                            Select {group.minSelect} {group.name}
+                          </button>
+                          {idx < totalCount - 1 && <span>,</span>}
+                        </span>
+                      );
+                    })}
+                    {unmetSlots.map((slot) => {
+                      const idx = runningIndex++;
+                      return (
+                        <span key={slot.slotId} className="inline-flex items-center">
+                          <span>Select 1 {slot.label}</span>
+                          {idx < totalCount - 1 && <span>,</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
       </div>
       </div>
     </div>
   );
 }
 
-export function CartItems({ items, editingItemId, addingItemId, onItemClick, onRemoveItem }: CartItemsProps) {
+export function CartItems({
+  items,
+  editingItemId,
+  addingItemId,
+  activeComboSlotId,
+  onItemClick,
+  onRequirementClick,
+  onRemoveItem,
+  getMenuItemById,
+  getComboDefinition,
+  bare,
+  seatingEnabled,
+}: CartItemsProps) {
   const hasEditingItem = editingItemId != null;
   const hasAddingItem = addingItemId != null;
 
   return (
-    <div className="rounded-2xl border border-[#e5e5e5] bg-[#ffffff] p-0">
+    <div className={bare ? "" : "rounded-2xl border border-[#e5e5e5] bg-[#ffffff] p-0"}>
       {items.length === 0 ? (
         <div className="flex items-center justify-center h-20 text-[#959595]">
           No items in cart
@@ -241,8 +514,13 @@ export function CartItems({ items, editingItemId, addingItemId, onItemClick, onR
                 isEditing={isEditing}
                 isDraft={isDraft}
                 isFaded={isFaded}
-                onClick={!isDraft && onItemClick ? () => onItemClick(item.id) : undefined}
+                activeComboSlotId={activeComboSlotId}
+                onItemClick={!isDraft && onItemClick ? onItemClick : undefined}
+                onRequirementClick={onRequirementClick}
                 onRemove={!isDraft && onRemoveItem ? () => onRemoveItem(item.id) : undefined}
+                getMenuItemById={getMenuItemById}
+                getComboDefinition={getComboDefinition}
+                seatingEnabled={seatingEnabled}
               />
             );
           })}

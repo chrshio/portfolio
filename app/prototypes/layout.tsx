@@ -28,9 +28,8 @@ export default function PrototypesLayout({
   }
 
   return (
-    <>
-      <PrototypeSelectorMenu />
+    <PrototypeSelectorMenu>
       {children}
-    </>
+    </PrototypeSelectorMenu>
   );
 }

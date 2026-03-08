@@ -38,3 +38,32 @@ Every `CartItem` created (whether added directly or via the add panel) must incl
   serviceCharges: [],
 }
 ```
+
+## Add panel ↔ Edit panel parity
+
+When editing **Item Add Panel** (`item-add-panel.tsx`) or **Item Edit Panel** (`item-edit-panel.tsx`), apply the same styling, layout, and UX changes to the other panel so they stay in sync (e.g. header layout, modifier tile active state, section labels, typography).
+
+## Modals and dialogs (iPad prototype)
+
+Modals in the iPad prototype must stay **inside the iPad** and be positioned **relative to the iPad screen**, not the browser viewport.
+
+### Rule 1: Contained within the iPad
+
+- Modals must **not** cover the entire screen or be positioned relative to the full viewport.
+- They must render inside the iPad screen container and use **absolute** positioning relative to it (so they are clipped by the iPad frame and don’t overflow).
+- This is already wired up when the app is wrapped in `IPadMock`: it provides `DialogContainerProvider` with a container ref to the iPad screen. The shared `Dialog` component (in `components/ui/dialog.tsx`) uses `useDialogContainer()` and, when `contained` is true, portals into that container and switches overlay/content from `fixed` to `absolute`.
+- **When adding a new modal/dialog** in the iPad prototype: use the existing `Dialog` from `@/components/ui/dialog`. Do not portal to `document.body` or use viewport-relative positioning for iPad-only flows.
+
+### Rule 2: Position from top of iPad screen
+
+- Modals should be positioned **68px from the top** of the iPad screen, not vertically centered over the viewport.
+- Apply this by passing `className="top-[68px] translate-y-0 ..."` (and any other layout classes) to `DialogContent`. This overrides the default centered positioning and keeps the modal within the iPad.
+
+```tsx
+// ✅ GOOD — modal inside iPad, 68px from top of iPad screen
+<DialogContent
+  className="top-[68px] translate-y-0 max-w-[min(420px,calc(100vw-2rem))] ..."
+>
+  ...
+</DialogContent>
+```

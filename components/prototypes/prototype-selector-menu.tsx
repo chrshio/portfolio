@@ -1,160 +1,129 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { projects } from "@/lib/prototypes-config";
+import { projects, type PrototypeItem } from "@/lib/prototypes-config";
 
-const EDGE_THRESHOLD_PX = 24;
-const HIDE_DELAY_MS = 300;
-const MIN_WIDTH_FOR_ALWAYS_VISIBLE = 1600;
+function variantShortLabel(item: PrototypeItem): string {
+  const map: Record<string, string> = {
+    cafe: "Cafe",
+    qsr: "QSR",
+    fsr: "FSR",
+    retail: "Retail",
+    voice: "Voice",
+    main: "Main",
+  };
+  return map[item.id] ?? item.name;
+}
 
-export function PrototypeSelectorMenu() {
+export function PrototypeSelectorMenu({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [hasSpaceForMenu, setHasSpaceForMenu] = useState(true);
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const check = () =>
-      setHasSpaceForMenu(typeof window !== "undefined" && window.innerWidth >= MIN_WIDTH_FOR_ALWAYS_VISIBLE);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  const clearHideTimeout = useCallback(() => {
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = null;
-    }
-  }, []);
-
-  const scheduleHide = useCallback(() => {
-    clearHideTimeout();
-    hideTimeoutRef.current = setTimeout(() => setMenuOpen(false), HIDE_DELAY_MS);
-  }, [clearHideTimeout]);
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!hasSpaceForMenu && e.clientX <= EDGE_THRESHOLD_PX) {
-        clearHideTimeout();
-        setMenuOpen(true);
-      } else if (!hasSpaceForMenu && menuOpen) {
-        scheduleHide();
-      }
-    },
-    [hasSpaceForMenu, menuOpen, clearHideTimeout, scheduleHide]
-  );
-
-  const handleMouseLeave = useCallback(() => {
-    if (!hasSpaceForMenu) scheduleHide();
-  }, [hasSpaceForMenu, scheduleHide]);
-
-  const handleMenuEnter = useCallback(() => {
-    if (!hasSpaceForMenu) {
-      clearHideTimeout();
-      setMenuOpen(true);
-    }
-  }, [hasSpaceForMenu, clearHideTimeout]);
-
-  const handleMenuLeave = useCallback(() => {
-    if (!hasSpaceForMenu) scheduleHide();
-  }, [hasSpaceForMenu, scheduleHide]);
-
-  const showMenu = hasSpaceForMenu || menuOpen;
-
-  // Parse current route: /prototypes/checkout-pos/qsr -> { project: checkout-pos, variant: qsr }
   const pathParts = pathname.replace(/^\/prototypes\/?/, "").split("/").filter(Boolean);
   const currentProjectId = pathParts[0] ?? null;
   const currentVariantId = pathParts[1] ?? pathParts[0] ?? null;
-
   const currentProject = projects.find((p) => p.id === currentProjectId);
 
   return (
-    <>
-      {/* Left-edge trigger zone - invisible strip that activates menu */}
-      <div
-        className="fixed left-0 top-0 bottom-0 z-40 w-[24px]"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        aria-hidden
-      />
-
-      {/* Menu panel - slides in from left */}
-      <div
-        className={cn(
-          "fixed left-0 top-0 bottom-0 z-50 w-[220px] transition-transform duration-200 ease-out",
-          "bg-[#0d0d0d] border-r border-white/20",
-          showMenu ? "translate-x-0" : "-translate-x-full"
-        )}
-        onMouseEnter={handleMenuEnter}
-        onMouseLeave={handleMenuLeave}
-      >
-        <div className="relative h-full w-[220px] pt-[280px] pl-[48px] pointer-events-auto">
-          {/* PROTOTYPES section */}
-          <p className="mb-4 pl-2 text-[11px] font-normal uppercase tracking-wide text-white/45">
-            Prototypes
-          </p>
-          <div className="space-y-1">
-            {projects.map((project) => {
-              const isSelected = project.id === currentProjectId;
+    <div className="h-screen overflow-hidden relative flex flex-col bg-[#1a1a1a]">
+      {/* Top: Variant segmented control – sits above the iPad */}
+      {currentProject && currentProject.prototypes.length > 1 && (
+        <div className="flex-shrink-0 flex justify-center pt-6 pb-1 -mb-24 z-10 relative">
+          <div className="flex h-10 items-center gap-1 rounded-full border-[1.4px] border-white/20 overflow-hidden p-1 min-w-[280px] max-w-[372px] w-max relative">
+            {/* Same frosted glass as left toggles */}
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{
+                background: "rgba(0, 0, 0, 0.5)",
+                backdropFilter: "blur(50px)",
+                WebkitBackdropFilter: "blur(50px)",
+              }}
+            />
+            {currentProject.prototypes.map((p) => {
+              const isSelected = p.id === currentVariantId;
               return (
                 <button
-                  key={project.id}
+                  key={p.id}
                   type="button"
-                  onClick={() => {
-                    const first = project.prototypes.find((p) => p.ready) ?? project.prototypes[0];
-                    if (first) router.push(first.path);
-                  }}
+                  onClick={() => p.ready && router.push(p.path)}
+                  disabled={!p.ready}
                   className={cn(
-                    "relative flex cursor-pointer items-center gap-3 py-1 pl-0 pr-2 text-left text-[14px] transition-colors",
-                    isSelected ? "text-white" : "text-white/48 hover:text-white/70"
+                    "relative flex flex-1 cursor-pointer items-center justify-center h-8 min-w-[52px] px-3 rounded-full text-[13px] leading-4 overflow-hidden transition-colors",
+                    isSelected ? "text-white" : "text-white/60",
+                    !p.ready && "cursor-not-allowed opacity-60"
                   )}
                 >
                   {isSelected && (
-                    <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white" />
+                    <div
+                      className="absolute inset-0 rounded-full pointer-events-none"
+                      style={{ background: "rgba(255, 255, 255, 0.08)" }}
+                    />
                   )}
-                  <span className="pl-2">{project.name}</span>
+                  <span className="relative">{variantShortLabel(p)}</span>
                 </button>
               );
             })}
           </div>
+        </div>
+      )}
 
-          {/* VARIANTS section - only for projects with multiple prototypes */}
-          {currentProject && currentProject.prototypes.length > 1 && (
-            <>
-              <p className="mt-10 mb-4 pl-2 text-[11px] font-normal uppercase tracking-wide text-white/45">
-                Variants
-              </p>
-              <div className="space-y-1">
-                {currentProject.prototypes.map((p) => {
-                  const isSelected = p.id === currentVariantId;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => p.ready && router.push(p.path)}
-                      disabled={!p.ready}
-                      className={cn(
-                        "relative flex items-center gap-3 py-1 pl-0 pr-2 text-left text-[14px] transition-colors",
-                        isSelected ? "text-white" : "text-white/48",
-                        p.ready ? "hover:text-white/70 cursor-pointer" : "cursor-not-allowed opacity-60"
-                      )}
-                    >
-                      {isSelected && (
-                        <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white" />
-                      )}
-                      <span className="pl-2">{p.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
+      {/* iPad area */}
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        {children}
+      </div>
+
+      {/* Left: Prototype switcher – hidden below 1400px; pops up when cursor at left edge */}
+      <div
+        className={cn(
+          "absolute left-0 top-0 bottom-0 z-40 w-[220px] overflow-visible",
+          "group"
+        )}
+      >
+        {/* Trigger zone at left edge – hover to reveal panel on narrow screens */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-5 min-[1400px]:hidden"
+          aria-hidden
+        />
+        <div
+          className={cn(
+            "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-[180px] rounded-[24px] border-[1.4px] border-white/20 overflow-hidden p-2 flex flex-col gap-2",
+            "min-[1400px]:opacity-100",
+            "max-[1399px]:opacity-0 max-[1399px]:pointer-events-none max-[1399px]:transition-opacity max-[1399px]:duration-200",
+            "max-[1399px]:group-hover:opacity-100 max-[1399px]:group-hover:pointer-events-auto"
           )}
+        >
+          <div
+            className="absolute inset-0 rounded-[16px] pointer-events-none"
+            style={{
+              background: "rgba(0, 0, 0, 0.5)",
+              backdropFilter: "blur(50px)",
+              WebkitBackdropFilter: "blur(50px)",
+            }}
+          />
+          {projects.map((project) => {
+            const isSelected = project.id === currentProjectId;
+            const first = project.prototypes.find((p) => p.ready) ?? project.prototypes[0];
+            return (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => first && router.push(first.path)}
+                className="relative flex w-full cursor-pointer items-center rounded-2xl px-5 py-2.5 text-left text-[13px] leading-5 text-white overflow-hidden"
+              >
+                {isSelected && (
+                  <div
+                    className="absolute inset-0 rounded-2xl pointer-events-none"
+                    style={{ background: "rgba(255, 255, 255, 0.08)" }}
+                  />
+                )}
+                <span className="relative font-medium text-[14px]">{project.name}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
-    </>
+
+    </div>
   );
 }

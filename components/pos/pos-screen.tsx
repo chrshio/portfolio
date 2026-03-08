@@ -11,8 +11,8 @@ import { BottomNavigation } from "./bottom-navigation";
 import type { CartItem, MenuItem } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
-  getModifierGroups,
-  isGroupRequirementUnmet,
+  getDefaultModifiers,
+  getModifierPriceDelta,
 } from "@/lib/modifiers";
 
 const TAX_RATE = 0.05;
@@ -26,7 +26,7 @@ export function POSScreen() {
   const [draftModifiers, setDraftModifiers] = useState<string[]>([]);
   const [draftOptions, setDraftOptions] = useState<DraftItemOptions>({
     note: "",
-    fulfillmentMethod: undefined,
+    fulfillmentMethod: "for-here",
     taxes: [],
     discounts: [],
     serviceCharges: [],
@@ -38,7 +38,7 @@ export function POSScreen() {
   const [addDraftModifiers, setAddDraftModifiers] = useState<string[]>([]);
   const [addDraftOptions, setAddDraftOptions] = useState<DraftItemOptions>({
     note: "",
-    fulfillmentMethod: undefined,
+    fulfillmentMethod: "for-here",
     taxes: [],
     discounts: [],
     serviceCharges: [],
@@ -47,10 +47,12 @@ export function POSScreen() {
   // Toast + scroll signal for the add panel validation.
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
+  const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
 
   // Slide-in animation for the toast.
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
+  const isEditingMode = editingItemId != null;
 
   useEffect(() => {
     if (addToastMessage) {
@@ -76,6 +78,7 @@ export function POSScreen() {
   // When the add panel is open, show a draft row in the cart so the user can
   // see how the item-in-progress affects the order total in real time.
   const draftCartItem: CartItem | null = addingItem
+    && !isEditingMode
     ? {
         id: ADD_DRAFT_ID,
         name: addingItem.name,
@@ -86,24 +89,49 @@ export function POSScreen() {
       }
     : null;
 
-  const displayItems = draftCartItem
-    ? [...cartItems, draftCartItem]
-    : cartItems;
+  const editingDraftItem: CartItem | null = editingItemId
+    ? (() => {
+        const base = cartItems.find((item) => item.id === editingItemId);
+        if (!base) return null;
+        return {
+          ...base,
+          quantity: draftQuantity,
+          modifiers: draftModifiers.length ? draftModifiers : undefined,
+          note: draftOptions.note || undefined,
+          fulfillmentMethod: draftOptions.fulfillmentMethod,
+          taxes: draftOptions.taxes,
+          discounts: draftOptions.discounts,
+          serviceCharges: draftOptions.serviceCharges,
+        };
+      })()
+    : null;
+
+  const displayItems = editingDraftItem
+    ? cartItems.map((item) => (item.id === editingDraftItem.id ? editingDraftItem : item))
+    : draftCartItem
+      ? [...cartItems, draftCartItem]
+      : cartItems;
 
   const subtotal = displayItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) =>
+      sum +
+      (item.price + getModifierPriceDelta(item, item.modifiers ?? [])) *
+        item.quantity,
     0
   );
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
 
   const handleMenuItemSelect = useCallback((item: MenuItem) => {
+    // Entering add flow should always exit edit flow.
+    setEditingItemId(null);
+    setEditScrollSignal(null);
     if (itemRequiresSelection(item)) {
       // Open the add panel so the user can make required selections first.
       setAddingItem(item);
       setAddDraftQuantity(1);
-      setAddDraftModifiers([]);
-      setAddDraftOptions({ note: "", fulfillmentMethod: undefined, taxes: [], discounts: [], serviceCharges: [] });
+      setAddDraftModifiers(getDefaultModifiers(item));
+      setAddDraftOptions({ note: "", fulfillmentMethod: "for-here", taxes: [], discounts: [], serviceCharges: [] });
     } else {
       // No required selections — add (or bump) directly.
       setCartItems((prev) => {
@@ -122,6 +150,7 @@ export function POSScreen() {
             quantity: 1,
             description: item.description,
             note: "",
+            fulfillmentMethod: "for-here",
             taxes: [],
             discounts: [],
             serviceCharges: [],
@@ -153,8 +182,6 @@ export function POSScreen() {
     setAddingItem(null);
   }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions]);
 
-  const addModifierGroups = addingItem ? getModifierGroups(addingItem) : [];
-
   const handleAddCancel = useCallback(() => {
     setAddingItem(null);
     setAddToastMessage(null);
@@ -162,27 +189,24 @@ export function POSScreen() {
   }, []);
 
   const handleAddAttempt = useCallback(() => {
-    const unmetGroup = addModifierGroups.find((g) =>
-      isGroupRequirementUnmet(g, addDraftModifiers)
-    );
-    if (unmetGroup) {
-      setAddToastMessage(`Select an option from ${unmetGroup.name} to continue.`);
-      setAddScrollSignal({ groupId: unmetGroup.id, nonce: Date.now() });
-    } else {
-      handleAddConfirm();
-    }
-  }, [addModifierGroups, addDraftModifiers, handleAddConfirm]);
+    handleAddConfirm();
+  }, [handleAddConfirm]);
 
   const handleItemClick = useCallback(
     (id: string) => {
       const item = cartItems.find((i) => i.id === id);
       if (!item) return;
+      // Entering edit flow should always exit add flow.
+      setAddingItem(null);
+      setAddToastMessage(null);
+      setAddScrollSignal(null);
       setEditingItemId(id);
+      setEditScrollSignal(null);
       setDraftQuantity(item.quantity);
-      setDraftModifiers(item.modifiers ?? []);
+      setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
       setDraftOptions({
         note: item.note ?? "",
-        fulfillmentMethod: item.fulfillmentMethod,
+        fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
         taxes: item.taxes ?? [],
         discounts: item.discounts ?? [],
         serviceCharges: item.serviceCharges ?? [],
@@ -191,8 +215,41 @@ export function POSScreen() {
     [cartItems]
   );
 
+  const handleRequirementClick = useCallback(
+    (itemId: string, groupId: string) => {
+      if (addingItem && itemId === ADD_DRAFT_ID) {
+        setAddScrollSignal({ groupId, nonce: Date.now() });
+        return;
+      }
+
+      const item = cartItems.find((i) => i.id === itemId);
+      if (!item) return;
+
+      // Entering edit flow should always exit add flow.
+      setAddingItem(null);
+      setAddToastMessage(null);
+      setAddScrollSignal(null);
+      if (editingItemId !== itemId) {
+        setEditingItemId(itemId);
+        setDraftQuantity(item.quantity);
+        setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
+        setDraftOptions({
+          note: item.note ?? "",
+          fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
+          taxes: item.taxes ?? [],
+          discounts: item.discounts ?? [],
+          serviceCharges: item.serviceCharges ?? [],
+        });
+      }
+
+      setEditScrollSignal({ groupId, nonce: Date.now() });
+    },
+    [addingItem, cartItems, editingItemId]
+  );
+
   const handleEditCancel = useCallback(() => {
     setEditingItemId(null);
+    setEditScrollSignal(null);
   }, []);
 
   const handleEditDone = useCallback(() => {
@@ -213,6 +270,7 @@ export function POSScreen() {
       )
     );
     setEditingItemId(null);
+    setEditScrollSignal(null);
   }, [editingItemId, draftQuantity, draftModifiers, draftOptions]);
 
   const handleModifiersChange = useCallback((modifiers: string[]) => {
@@ -230,12 +288,19 @@ export function POSScreen() {
   const handleRemoveItem = useCallback(() => {
     setCartItems((prev) => prev.filter((item) => item.id !== editingItemId));
     setEditingItemId(null);
+    setEditScrollSignal(null);
   }, [editingItemId]);
 
   const handleRemoveCartItem = useCallback((id: string) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
     if (editingItemId === id) setEditingItemId(null);
   }, [editingItemId]);
+
+  const handleClearCart = useCallback(() => {
+    setCartItems([]);
+    setEditingItemId(null);
+    setAddingItem(null);
+  }, []);
 
   const handleSave = useCallback(() => {
     console.log("Saving order...", cartItems);
@@ -264,6 +329,7 @@ export function POSScreen() {
               onOptionsChange={handleOptionsChange}
               onCompItem={handleCompItem}
               onRemoveItem={handleRemoveItem}
+              scrollSignal={editScrollSignal}
             />
           ) : addingItem ? (
             <ItemAddPanel
@@ -291,14 +357,17 @@ export function POSScreen() {
             onSave={handleSave}
             onPay={handlePay}
             editingItemId={editingItemId}
+            activeComboSlotId={null}
             onItemClick={handleItemClick}
+            onRequirementClick={handleRequirementClick}
             onEditCancel={handleEditCancel}
             onEditDone={handleEditDone}
-            isAddMode={!!addingItem}
-            addingItemId={addingItem ? ADD_DRAFT_ID : null}
+            isAddMode={!!addingItem && !isEditingMode}
+            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
             onAddCancel={handleAddCancel}
             onAdd={handleAddAttempt}
             onRemoveItem={handleRemoveCartItem}
+            onClearCart={handleClearCart}
           />
         </div>
       </div>
