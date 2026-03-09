@@ -218,7 +218,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
         <div
           ref={leftPanelRef}
           className={cn(
-            "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-fit rounded-[16px] border-[1.4px] border-white/40 overflow-hidden p-1 flex flex-col gap-2",
+            "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-fit rounded-[16px] border-[1.4px] border-[rgba(80,80,80,0.22)] overflow-hidden p-1 flex flex-col gap-2",
             "min-[1400px]:opacity-100 min-[1400px]:pointer-events-auto",
             "max-[1399px]:opacity-0 max-[1399px]:pointer-events-none max-[1399px]:transition-opacity max-[1399px]:duration-200",
             "max-[1399px]:group-hover:opacity-100 max-[1399px]:group-hover:pointer-events-auto"
@@ -228,7 +228,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
           <div
             className="absolute inset-0 z-0 rounded-[16px] pointer-events-none"
             style={{
-              background: "rgba(255, 255, 255, 0.08)",
+              background: "rgba(50, 50, 50, 0.45)",
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
             }}
@@ -258,9 +258,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
                 onClick={() => first && router.push(first.path)}
                 className={cn(
                   "relative z-10 flex w-[150px] cursor-pointer items-center justify-center rounded-lg py-2.5 pr-7 pl-4 text-left text-[19px] leading-6 overflow-hidden transition-colors",
-                  isSelected
-                    ? "text-[rgba(255,255,255,0.96)] bg-white/20"
-                    : "text-[#545454]"
+                  isSelected ? "text-[rgba(255,255,255,0.96)]" : "text-[#545454]"
                 )}
               >
                 <span className="relative font-medium text-[14px]">{project.name}</span>

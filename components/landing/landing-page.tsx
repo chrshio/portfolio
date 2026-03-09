@@ -56,6 +56,8 @@ export function LandingPage() {
               </div>
               <Link
               href="https://www.figma.com/deck/Z93Kg5O9XsrqamdSS9Em6I"
+              target="_blank"
+              rel="noopener noreferrer"
               className="block underline"
             >
               Work samples
