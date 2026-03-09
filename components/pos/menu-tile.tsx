@@ -18,8 +18,21 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
   // Get tile styling based on type
   const getTileStyles = () => {
     switch (tile.type) {
-      case "category":
-        return "bg-[#101010] text-[#ffffff]";
+      case "category": {
+        const cat = tile as MenuCategory;
+        const variant = cat.variant ?? "default";
+        // Palette (retail only): colored variants; default keeps other prototypes (FSR, QSR) as black
+        const categoryVariants: Record<string, string> = {
+          default: "bg-[#101010] text-[#ffffff]",
+          green: "bg-[#166534] text-[#ffffff]", // dark green
+          blue: "bg-[#1d4ed8] text-[#ffffff]", // blue
+          amber: "bg-[#b45309] text-[#ffffff]", // light brown / caramel
+          rose: "bg-[#dc2626] text-[#ffffff]", // bright red
+          slate: "bg-[#6d28d9] text-[#ffffff]", // purple
+          teal: "bg-[#0d9488] text-[#ffffff]", // teal / aqua green
+        };
+        return categoryVariants[variant] ?? categoryVariants.default;
+      }
       case "action":
         const actionTile = tile as ActionTile;
         if (actionTile.variant === "success") {
@@ -51,7 +64,7 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
 
   // Shared content wrapper: same padding and alignment as first row (featured image tiles)
   const contentWrapperClass = "p-3 flex flex-col justify-end h-full";
-  const mainLineClass = "font-medium text-sm text-left";
+  const mainLineClass = "font-medium text-sm text-left leading-4 line-clamp-2";
 
   const renderContent = () => {
     if (tile.type === "item") {

@@ -35,6 +35,8 @@ interface CartSectionProps {
   getMenuItemById?: (id: string) => MenuItem | undefined;
   /** Combo definition lookup; when provided, combo line items are shown in slot order. */
   getComboDefinition?: (menuItemId: string) => ComboDefinition | null;
+  voiceMode?: boolean;
+  onVoiceToggle?: () => void;
 }
 
 export function CartSection({
@@ -62,6 +64,8 @@ export function CartSection({
   onClearCart,
   getMenuItemById,
   getComboDefinition,
+  voiceMode,
+  onVoiceToggle,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -72,6 +76,19 @@ export function CartSection({
     return (
       <div className="flex flex-col h-full bg-white pr-6">
         <CartHeader itemCount={0} onMoreClick={() => setActionsOpen(true)} />
+        <div className="flex-1 min-h-0" />
+        {onVoiceToggle && (
+          <div className="mt-auto">
+            <CartFooter
+              onSave={onSave}
+              onPay={onPay}
+              disabled
+              voiceMode={voiceMode}
+              onVoiceToggle={onVoiceToggle}
+              cartEmpty
+            />
+          </div>
+        )}
         <CartActionsModal
           open={actionsOpen}
           onOpenChange={setActionsOpen}
@@ -121,6 +138,9 @@ export function CartSection({
           isAddSlotDetailMode={isAddSlotDetailMode}
           onAddSlotCancel={onAddSlotCancel}
           onAddSlotDone={onAddSlotDone}
+          voiceMode={voiceMode}
+          onVoiceToggle={onVoiceToggle}
+          cartEmpty={false}
         />
       </div>
 

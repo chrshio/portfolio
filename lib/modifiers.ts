@@ -130,9 +130,64 @@ export const CHICKEN_AND_WAFFLES_MODIFIER_GROUPS: ModifierGroup[] = [
   SPICE_LEVEL_MODIFIER_GROUP,
 ];
 
+/** Tenders individual items (QSR): spice level required only. */
+export const TENDERS_MODIFIER_GROUPS: ModifierGroup[] = [
+  SPICE_LEVEL_MODIFIER_GROUP,
+];
+
+/** Tikkaville Sandwich (QSR): optional remove toppings only. */
+export const TIKKAVILLE_SANDWICH_MODIFIER_GROUPS: ModifierGroup[] = [
+  {
+    id: "remove-toppings-tikkaville",
+    name: "Remove Toppings",
+    options: [
+      { id: "remove-no-coleslaw-tikkaville", name: "No Coleslaw" },
+      { id: "remove-no-pickled-onion-tikkaville", name: "No Pickled Onion" },
+      { id: "remove-no-mint-chutney-tikkaville", name: "No Mint Chutney" },
+    ],
+  },
+];
+
+/** Smash Burger individual items (QSR): optional build-your-burger add-ons and remove-toppings. */
+export const SMASH_BURGER_MODIFIER_GROUPS: ModifierGroup[] = [
+  {
+    id: "build-your-burger",
+    name: "Build Your Burger",
+    options: [
+      { id: "extra-smash-patty", name: "Extra Smash Patty", price: 2.99 },
+      { id: "extra-cheese", name: "Extra Cheese", price: 0.49 },
+      { id: "extra-pickles", name: "Extra Pickles", price: 0.49 },
+      { id: "extra-griddled-onions", name: "Extra Griddled Onions", price: 0.49 },
+      { id: "extra-jalapenos", name: "Extra Jalapeños", price: 0.49 },
+    ],
+  },
+  {
+    id: "remove-toppings-smash-burger",
+    name: "Remove Toppings - Smash Burger",
+    options: [
+      { id: "remove-no-pickles-smash", name: "No Pickles" },
+      { id: "remove-no-griddled-onions-smash", name: "No Griddled Onions" },
+      { id: "remove-no-american-cheese-smash", name: "No American Cheese" },
+      { id: "remove-no-house-sauce-smash", name: "No House Sauce" },
+      { id: "remove-no-jalapenos-smash", name: "No Jalapeños" },
+    ],
+  },
+];
+
+/** Retail/item names that have no variants or modifiers. */
+const ITEMS_WITHOUT_MODIFIERS = ["Milky Coffee Risograph Print", "Tikka Melt"];
+
+const TENDERS_ITEM_NAMES = ["Single Tender", "3 Tenders", "5 Tenders"];
+
+const SMASH_BURGER_ITEM_NAMES = ["Classic Smash Burger", "Spicy Smash Burger"];
+
 export function getModifierGroups(item: { name: string }): ModifierGroup[] {
+  if (ITEMS_WITHOUT_MODIFIERS.includes(item.name)) return [];
   if (item.name === "Nashville Sandwich") return NASHVILLE_SANDWICH_MODIFIER_GROUPS;
   if (item.name === "Chicken and Waffles") return CHICKEN_AND_WAFFLES_MODIFIER_GROUPS;
+  if (TENDERS_ITEM_NAMES.includes(item.name)) return TENDERS_MODIFIER_GROUPS;
+  if (item.name === "Tikkaville Sandwich") return TIKKAVILLE_SANDWICH_MODIFIER_GROUPS;
+  if (SMASH_BURGER_ITEM_NAMES.includes(item.name)) return SMASH_BURGER_MODIFIER_GROUPS;
   const isBeverage = BEVERAGE_KEYWORDS.some((kw) =>
     item.name.toLowerCase().includes(kw)
   );

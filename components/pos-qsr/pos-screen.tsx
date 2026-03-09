@@ -16,11 +16,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection } from "@/lib/pos-types";
+import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
   getModifierPriceDelta,
+  getModifierGroups,
+  isGroupRequirementUnmet,
 } from "@/lib/modifiers";
 import {
   getComboDefinition,
@@ -31,6 +33,27 @@ import {
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
+
+/** Returns slot ids (in combo order) that have at least one unmet required modifier (e.g. spice level). */
+function getSlotsWithUnmetModifierRequirements(
+  comboDef: ComboDefinition,
+  selections: Record<string, ComboSlotSelection>,
+  getMenuItemById: (id: string) => MenuItem | undefined
+): string[] {
+  const slotIds: string[] = [];
+  for (const slot of comboDef.slots) {
+    const sel = selections[slot.slotId];
+    if (!sel?.itemId) continue;
+    const menuItem = getMenuItemById(sel.itemId);
+    if (!menuItem) continue;
+    const groups = getModifierGroups(menuItem);
+    const hasUnmet = groups.some((g) =>
+      isGroupRequirementUnmet(g, sel.modifiers ?? [])
+    );
+    if (hasUnmet) slotIds.push(slot.slotId);
+  }
+  return slotIds;
+}
 
 export function POSScreenQSR() {
   const cloneSelection = (selection?: { itemId: string; modifiers?: string[] }) =>
@@ -76,6 +99,9 @@ export function POSScreenQSR() {
   const [editingComboSlotId, setEditingComboSlotId] = useState<string | null>(null);
   const addSlotSelectionSnapshotRef = useRef<Record<string, { itemId: string; modifiers?: string[] } | undefined>>({});
 
+  /** After category onboarding, slots that need modifier selection (e.g. spice level); we auto-open slot detail for each. */
+  const [addPendingModifierSlotQueue, setAddPendingModifierSlotQueue] = useState<string[]>([]);
+
   // Combo onboarding: when user taps a combo, show category pickers consecutively before the add panel.
   const [onboardingItem, setOnboardingItem] = useState<MenuItem | null>(null);
   const [onboardingSlotQueue, setOnboardingSlotQueue] = useState<ComboSlot[]>([]);
@@ -107,6 +133,51 @@ export function POSScreenQSR() {
     const t = setTimeout(() => setAddToastMessage(null), 4000);
     return () => clearTimeout(t);
   }, [addToastMessage]);
+
+  // After opening add panel from combo onboarding, auto-open slot detail for first slot that needs modifier selection.
+  useEffect(() => {
+    if (
+      addingItem &&
+      addPendingModifierSlotQueue.length > 0 &&
+      editingComboSlotId === null
+    ) {
+      setEditingComboSlotId(addPendingModifierSlotQueue[0]);
+    }
+  }, [addingItem, addPendingModifierSlotQueue, editingComboSlotId]);
+
+  // When the user completes all required modifiers for the current slot (e.g. selected spice level), auto-advance back to combo details or to the next slot.
+  useEffect(() => {
+    if (
+      !addingItem ||
+      !editingComboSlotId ||
+      !addPendingModifierSlotQueue.includes(editingComboSlotId)
+    )
+      return;
+    const comboDef = getComboDefinition(addingItem.id);
+    if (!comboDef) return;
+    const slotsWithUnmet = getSlotsWithUnmetModifierRequirements(
+      comboDef,
+      addDraftComboSelections,
+      getMenuItemById
+    );
+    if (slotsWithUnmet.includes(editingComboSlotId)) return;
+    // Current slot is complete — auto-advance (same as tapping Done).
+    delete addSlotSelectionSnapshotRef.current[editingComboSlotId];
+    setAddPendingModifierSlotQueue((prev) => {
+      const next = prev.filter((id) => id !== editingComboSlotId);
+      if (next.length > 0) {
+        setEditingComboSlotId(next[0]);
+        return next;
+      }
+      setEditingComboSlotId(null);
+      return [];
+    });
+  }, [
+    addingItem,
+    editingComboSlotId,
+    addPendingModifierSlotQueue,
+    addDraftComboSelections,
+  ]);
 
   // When the add panel is open, show a draft row in the cart so the user can
   // see how the item-in-progress affects the order total in real time.
@@ -196,6 +267,12 @@ export function POSScreenQSR() {
 
     if (needsPanel) {
       openAddPanelForCombo(item, {});
+      const comboDefForQueue = getComboDefinition(item.id);
+      const defaultsForQueue = comboDefForQueue ? getDefaultComboSelections(comboDefForQueue) : {};
+      const modifierQueue = comboDefForQueue
+        ? getSlotsWithUnmetModifierRequirements(comboDefForQueue, defaultsForQueue, getMenuItemById)
+        : [];
+      setAddPendingModifierSlotQueue(modifierQueue);
     } else {
       setCartItems((prev) => {
         const existing = prev.find((c) => c.id === item.id);
@@ -232,10 +309,15 @@ export function POSScreenQSR() {
         setOnboardingSlotQueue(remaining);
         setOnboardingSearch("");
       } else if (onboardingItem) {
+        const comboDef = getComboDefinition(onboardingItem.id);
+        const modifierSlotQueue = comboDef
+          ? getSlotsWithUnmetModifierRequirements(comboDef, newSelections, getMenuItemById)
+          : [];
         setOnboardingItem(null);
         setOnboardingSlotQueue([]);
         setOnboardingSearch("");
         openAddPanelForCombo(onboardingItem, newSelections);
+        setAddPendingModifierSlotQueue(modifierSlotQueue);
         setOnboardingSelections({});
       }
     },
@@ -277,6 +359,7 @@ export function POSScreenQSR() {
     ]);
     setAddingItem(null);
     setEditingComboSlotId(null);
+    setAddPendingModifierSlotQueue([]);
     addSlotSelectionSnapshotRef.current = {};
   }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, addDraftComboSelections]);
 
@@ -284,6 +367,7 @@ export function POSScreenQSR() {
     setAddingItem(null);
     setEditingComboSlotId(null);
     setAddDraftComboSelections({});
+    setAddPendingModifierSlotQueue([]);
     setAddToastMessage(null);
     setAddScrollSignal(null);
     addSlotSelectionSnapshotRef.current = {};
@@ -295,7 +379,15 @@ export function POSScreenQSR() {
 
   const handleAddSlotDone = useCallback(() => {
     if (editingComboSlotId) delete addSlotSelectionSnapshotRef.current[editingComboSlotId];
-    setEditingComboSlotId(null);
+    setAddPendingModifierSlotQueue((prev) => {
+      const next = prev.filter((id) => id !== editingComboSlotId);
+      if (next.length > 0) {
+        setEditingComboSlotId(next[0]);
+        return next;
+      }
+      setEditingComboSlotId(null);
+      return [];
+    });
   }, [editingComboSlotId]);
 
   const handleAddSlotCancel = useCallback(() => {
@@ -371,9 +463,27 @@ export function POSScreenQSR() {
           discounts: item.discounts ?? [],
           serviceCharges: item.serviceCharges ?? [],
         });
+        const comboDef = item.menuItemId ? getComboDefinition(item.menuItemId) : null;
+        setEditDraftComboSelections(
+          item.comboSelections && Object.keys(item.comboSelections).length > 0
+            ? item.comboSelections
+            : comboDef
+              ? getDefaultComboSelections(comboDef)
+              : {}
+        );
       }
 
-      setEditScrollSignal({ groupId, nonce: Date.now() });
+      // Combo slot modifier requirement: open slot-detail view and scroll to the group.
+      const isComboSlotGroup = groupId.startsWith("__combo__:");
+      if (isComboSlotGroup) {
+        const parts = groupId.split(":");
+        const slotId = parts[1];
+        const realGroupId = parts.slice(2).join(":");
+        setEditingComboSlotId(slotId ?? null);
+        setEditScrollSignal({ groupId: realGroupId, nonce: Date.now() });
+      } else {
+        setEditScrollSignal({ groupId, nonce: Date.now() });
+      }
     },
     [addingItem, cartItems, editingItemId]
   );

@@ -9,6 +9,8 @@ import {
   type ModifierGroup,
   getModifierGroups,
   computeNewModifiers,
+  isGroupRequirementUnmet,
+  getModifierDisplay,
 } from "@/lib/modifiers";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +38,14 @@ function getCategoryItemSecondaryText(item: MenuItem, slot: ComboSlot): string |
   return parts.length ? parts.join(", ") : null;
 }
 
+/** Build one-line summary of selected modifiers/variant for combo slot secondary text. */
+function getSlotModifierSummary(item: MenuItem, modifierIds: string[]): string | null {
+  if (modifierIds.length === 0) return null;
+  const { variantName, modifierNames } = getModifierDisplay(item, modifierIds);
+  const parts = [...(variantName ? [variantName] : []), ...modifierNames];
+  return parts.length ? parts.join(", ") : null;
+}
+
 /** Row component. When selectedItem is set: photo + item name left, gray Modify pill right (Figma 319388). When no selection: gray box left, category name, Select button right (Figma 319389-99336). */
 function ComboSlotRow({
   label,
@@ -48,8 +58,12 @@ function ComboSlotRow({
   isExpanded,
   onClick,
   selectedItem,
-  /** When slot is unselected and has a minimum selection requirement, e.g. "Select 1". Shown as red secondary text. */
-  requirementText,
+  /** Variant/modifier summary for the selected slot item (e.g. "Mild, No Coleslaw"). Shown as secondary text. */
+  slotItemSecondaryText,
+  /** When true, show a blue dot badge on the Select button (category slot with no selection). */
+  showSelectBadge,
+  /** When true, show a blue dot badge on the Modify button to indicate missing requirement. */
+  hasUnmetRequirement,
 }: {
   label: string;
   value: string;
@@ -64,8 +78,12 @@ function ComboSlotRow({
   onClick: () => void;
   /** When set, show item photo + name left, gray Modify button right. When null, show gray placeholder + Select button. */
   selectedItem?: MenuItem | null;
-  /** When slot is unselected and has a min selection requirement, e.g. "Select 1". Shown as red secondary text. */
-  requirementText?: string;
+  /** Variant/modifier summary for the selected slot item. Shown as secondary text below the item name. */
+  slotItemSecondaryText?: string | null;
+  /** When true, show a blue dot badge on the Select button. */
+  showSelectBadge?: boolean;
+  /** When true, show a blue dot badge on the Modify button. */
+  hasUnmetRequirement?: boolean;
 }) {
   const hasItemLayout = selectedItem != null;
   const showSubAndModify = hasItemLayout && showModify && showSub;
@@ -101,6 +119,11 @@ function ComboSlotRow({
             <span className="text-[16px] font-medium leading-6 text-[#101010] truncate">
               {selectedItem!.name}
             </span>
+            {slotItemSecondaryText && (
+              <span className="text-[13px] text-[#666] leading-5 truncate mt-0.5">
+                {slotItemSecondaryText}
+              </span>
+            )}
           </div>
         </button>
         <button
@@ -113,13 +136,21 @@ function ComboSlotRow({
         >
           <span className="text-[14px] font-medium text-[#101010]">Sub</span>
         </button>
-        <button
-          type="button"
-          onClick={handleModify}
-          className="shrink-0 rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center active:bg-[#e5e5e5]"
-        >
-          <span className="text-[14px] font-medium text-[#101010]">Modify</span>
-        </button>
+        <span className="relative inline-flex shrink-0">
+          <button
+            type="button"
+            onClick={handleModify}
+            className="rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center active:bg-[#e5e5e5]"
+          >
+            <span className="text-[14px] font-medium text-[#101010]">Modify</span>
+          </button>
+          {hasUnmetRequirement && (
+            <span
+              className="absolute right-0 top-0 size-2.5 rounded-full bg-[#007bff] ring-4 ring-white"
+              aria-hidden
+            />
+          )}
+        </span>
       </div>
     );
   }
@@ -151,15 +182,28 @@ function ComboSlotRow({
             <span className="text-[16px] font-medium leading-6 text-[#101010] truncate">
               {selectedItem!.name}
             </span>
+            {slotItemSecondaryText && (
+              <span className="text-[13px] text-[#666] leading-5 truncate mt-0.5">
+                {slotItemSecondaryText}
+              </span>
+            )}
           </div>
         </button>
-        <button
-          type="button"
-          onClick={handleModify}
-          className="shrink-0 rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center active:bg-[#e5e5e5]"
-        >
-          <span className="text-[14px] font-medium text-[#101010]">Modify</span>
-        </button>
+        <span className="relative inline-flex shrink-0">
+          <button
+            type="button"
+            onClick={handleModify}
+            className="rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center active:bg-[#e5e5e5]"
+          >
+            <span className="text-[14px] font-medium text-[#101010]">Modify</span>
+          </button>
+          {hasUnmetRequirement && (
+            <span
+              className="absolute right-0 top-0 size-2.5 rounded-full bg-[#007bff] ring-4 ring-white"
+              aria-hidden
+            />
+          )}
+        </span>
       </div>
     );
   }
@@ -191,6 +235,11 @@ function ComboSlotRow({
             <span className="text-[16px] font-medium leading-6 text-[#101010] truncate">
               {selectedItem.name}
             </span>
+            {slotItemSecondaryText && (
+              <span className="text-[13px] text-[#666] leading-5 truncate mt-0.5">
+                {slotItemSecondaryText}
+              </span>
+            )}
           </div>
           {showModify && (
             <div className="shrink-0 rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center">
@@ -210,16 +259,19 @@ function ComboSlotRow({
             <span className="text-[16px] font-medium leading-6 text-[#101010] truncate">
               {value}
             </span>
-            {requirementText && (
-              <span className="text-[14px] font-normal leading-6 text-[#c0392b]">
-                {requirementText}
-              </span>
-            )}
           </div>
           {/* Select button right */}
-          <div className="shrink-0 rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center">
-            <span className="text-[14px] font-medium text-[#101010]">Select</span>
-          </div>
+          <span className="relative inline-flex shrink-0">
+            <div className="rounded-full bg-[#f0f0f0] px-4 py-2 min-h-[40px] flex items-center justify-center">
+              <span className="text-[14px] font-medium text-[#101010]">Select</span>
+            </div>
+            {showSelectBadge && (
+              <span
+                className="absolute right-0 top-0 size-2.5 rounded-full bg-[#007bff] ring-4 ring-white"
+                aria-hidden
+              />
+            )}
+          </span>
         </>
       )}
     </button>
@@ -277,6 +329,13 @@ export function ComboSection({
             const displayName = menuItem?.name ?? slot.itemId;
             const modifierGroups = menuItem ? getModifierGroups(menuItem) : [];
             const slotModifiers = selection?.modifiers ?? [];
+            const hasUnmetRequirement = modifierGroups.some((g) =>
+              isGroupRequirementUnmet(g, slotModifiers)
+            );
+
+            const slotModifierSummary = menuItem
+              ? getSlotModifierSummary(menuItem, slotModifiers)
+              : null;
 
             return (
               <div key={slot.slotId} className="border-b border-[#f0f0f0] last:border-b-0">
@@ -290,6 +349,8 @@ export function ComboSection({
                   isExpanded={isExpanded}
                   onClick={() => setExpandedSlotId(isExpanded ? null : slot.slotId)}
                   selectedItem={menuItem}
+                  slotItemSecondaryText={slotModifierSummary}
+                  hasUnmetRequirement={hasUnmetRequirement}
                 />
                 {isExpanded && menuItem && modifierGroups.length > 0 && (
                   <div className="px-4 py-3 bg-[#fafafa]">
@@ -333,6 +394,15 @@ export function ComboSection({
               : null;
             // When no selection: show category name (e.g. "Side", "Drink"); when selected: show item name (e.g. "Fries")
             const displayName = selectedItem?.name ?? slot.label;
+            const slotModifiers = selection?.modifiers ?? [];
+            const categoryModifierGroups = selectedItem ? getModifierGroups(selectedItem) : [];
+            const hasUnmetRequirement = categoryModifierGroups.some((g) =>
+              isGroupRequirementUnmet(g, slotModifiers)
+            );
+            const categorySlotModifierSummary =
+              selectedItem && slotModifiers.length > 0
+                ? getSlotModifierSummary(selectedItem, slotModifiers)
+                : null;
 
             return (
               <div key={slot.slotId} className="border-b border-[#f0f0f0] last:border-b-0">
@@ -347,7 +417,9 @@ export function ComboSection({
                   isExpanded={isPickerOpen}
                   onClick={() => setCategoryPickerSlotId(isPickerOpen ? null : slot.slotId)}
                   selectedItem={selectedItem ?? undefined}
-                  requirementText={!selectedItem ? "Select 1" : undefined}
+                  slotItemSecondaryText={categorySlotModifierSummary}
+                  showSelectBadge={!selectedItem}
+                  hasUnmetRequirement={hasUnmetRequirement}
                 />
               </div>
             );

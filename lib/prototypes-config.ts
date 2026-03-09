@@ -19,8 +19,8 @@ export const projects: ProjectItem[] = [
       { id: "cafe", name: "Cafe", path: "/prototypes/checkout-pos/cafe", ready: true },
       { id: "qsr", name: "QSR", path: "/prototypes/checkout-pos/qsr", ready: true },
       { id: "fsr", name: "FSR mode", path: "/prototypes/checkout-pos/fsr", ready: true },
-      { id: "retail", name: "Retail mode", path: "/prototypes/checkout-pos/retail", ready: false },
-      { id: "voice", name: "POS vision", path: "/prototypes/checkout-pos/voice", ready: false },
+      { id: "retail", name: "Retail mode", path: "/prototypes/checkout-pos/retail", ready: true },
+      { id: "voice", name: "Voice", path: "/prototypes/checkout-pos/voice", ready: true },
     ],
   },
   {

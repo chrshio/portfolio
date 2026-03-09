@@ -222,18 +222,18 @@ function CartItemRow({
 
           return (
             <div className="flex flex-col items-start gap-0 w-full relative">
-              {/* Row 1: Item name × quantity (left) | Total price (right) */}
-              <div className="flex gap-1 items-center leading-5 text-[16px] w-full">
-                <div className="flex-1 flex gap-1 items-center min-w-0">
-                  <p className="font-medium text-[#101010] shrink-0 truncate">
+              {/* Row 1: Item name (wraps) | × quantity | Total price — quantity always between name and price */}
+              <div className="flex gap-1 items-start leading-5 text-[16px] w-full">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-[#101010] break-words leading-[22px]">
                     {item.name}
                   </p>
-                  {item.quantity > 1 && (
+                </div>
+                {item.quantity > 1 && (
                   <p className="font-normal text-[#666] shrink-0">
                     × {item.quantity}
                   </p>
                 )}
-                </div>
                 <p className="font-normal text-[#101010] text-right shrink-0">
                   ${totalPrice.toFixed(2)}
                 </p>
@@ -276,7 +276,7 @@ function CartItemRow({
                       return subParts.length > 0 ? `${slotName} (${subParts.join(", ")})` : slotName;
                     });
                     return (
-                      <p className="text-[14px] leading-6 text-[#666] w-full">
+                      <p className="text-[14px] leading-[20px] text-[#666] w-full">
                         {parts.join(", ")}
                       </p>
                     );
@@ -302,7 +302,7 @@ function CartItemRow({
                           <div key={slotId} className="w-full">
                             <p
                               className={cn(
-                                "text-[14px] leading-6 w-full",
+                                "text-[14px] leading-[18px] w-full",
                                 isInactiveWhileEditing
                                   ? "text-[#9b9b9b]"
                                   : "text-[#101010]"
@@ -314,7 +314,7 @@ function CartItemRow({
                               <p
                                 key={`${slotId}-${line}`}
                                 className={cn(
-                                  "text-[14px] leading-6 w-full pl-4",
+                                  "text-[14px] leading-[18px] w-full pl-4",
                                   isInactiveWhileEditing
                                     ? "text-[#b3b3b3]"
                                     : "text-[#101010]"
@@ -333,7 +333,7 @@ function CartItemRow({
               {/* Seat label when assigned */}
               {seatingEnabled && item.seatId && (
                 <p className="text-[14px] leading-5 text-[#666] w-full">
-                  {item.seatId.replace("seat-", "Seat ")}
+                  {item.seatId === "table" ? "Table" : item.seatId.replace("seat-", "Seat ")}
                 </p>
               )}
 
@@ -401,11 +401,42 @@ function CartItemRow({
                     )
                   : [];
 
+                // Missing modifier requirements on individual items inside the combo (e.g. spice level on 3 Tenders).
+                const unmetComboSlotModifierGroups: { slotId: string; slotLabel: string; group: { id: string; name: string; minSelect?: number } }[] = [];
+                if (comboDef && getMenuItemById && item.comboSelections) {
+                  for (const slot of comboDef.slots) {
+                    const sel = item.comboSelections[slot.slotId];
+                    if (!sel?.itemId) continue;
+                    const menuItem = getMenuItemById(sel.itemId);
+                    if (!menuItem) continue;
+                    const groups = getModifierGroups(menuItem);
+                    for (const group of groups) {
+                      if (isGroupRequirementUnmet(group, sel.modifiers ?? [])) {
+                        unmetComboSlotModifierGroups.push({
+                          slotId: slot.slotId,
+                          slotLabel: slot.label,
+                          group: { id: group.id, name: group.name, minSelect: group.minSelect },
+                        });
+                      }
+                    }
+                  }
+                }
+
                 const missingSeat = seatingEnabled && !item.seatId;
 
-                if (unmetGroups.length === 0 && unmetSlots.length === 0 && !missingSeat) return null;
+                if (
+                  unmetGroups.length === 0 &&
+                  unmetSlots.length === 0 &&
+                  unmetComboSlotModifierGroups.length === 0 &&
+                  !missingSeat
+                )
+                  return null;
 
-                const totalCount = unmetGroups.length + unmetSlots.length + (missingSeat ? 1 : 0);
+                const totalCount =
+                  unmetGroups.length +
+                  unmetSlots.length +
+                  unmetComboSlotModifierGroups.length +
+                  (missingSeat ? 1 : 0);
                 let runningIndex = 0;
 
                 return (
@@ -423,7 +454,7 @@ function CartItemRow({
                               e.stopPropagation();
                               onRequirementClick?.(item.id, "__seat__");
                             }}
-                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-inherit appearance-none cursor-pointer"
+                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-[16px] appearance-none cursor-pointer"
                           >
                             Select Seat
                           </button>
@@ -450,9 +481,37 @@ function CartItemRow({
                               e.stopPropagation();
                               onRequirementClick?.(item.id, group.id);
                             }}
-                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-inherit appearance-none cursor-pointer"
+                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-[16px] appearance-none cursor-pointer"
                           >
                             Select {group.minSelect} {group.name}
+                          </button>
+                            {idx < totalCount - 1 && <span>,</span>}
+                        </span>
+                      );
+                    })}
+                    {unmetComboSlotModifierGroups.map(({ slotId, slotLabel, group }) => {
+                      const idx = runningIndex++;
+                      const compositeGroupId = `__combo__:${slotId}:${group.id}`;
+                      return (
+                        <span key={`${slotId}:${group.id}`} className="inline-flex items-center">
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onPointerMove={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRequirementClick?.(item.id, compositeGroupId);
+                            }}
+                            className="p-0 m-0 border-0 bg-transparent text-inherit font-inherit leading-[16px] appearance-none cursor-pointer"
+                          >
+                            Select {group.minSelect ?? 1} {group.name}
                           </button>
                           {idx < totalCount - 1 && <span>,</span>}
                         </span>

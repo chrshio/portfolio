@@ -12,11 +12,22 @@ export interface MenuItem {
   description?: string;
 }
 
+/** Optional variant for category tile styling (e.g. colored backgrounds in retail). */
+export type MenuCategoryVariant =
+  | 'default'
+  | 'green'
+  | 'blue'
+  | 'amber'
+  | 'rose'
+  | 'slate'
+  | 'teal';
+
 export interface MenuCategory {
   id: string;
   name: string;
   type: 'category';
   items?: MenuItem[];
+  variant?: MenuCategoryVariant;
 }
 
 export interface ActionTile {
@@ -111,6 +122,21 @@ export const FSR_COURSES: CourseDefinition[] = [
   { id: "mains", label: "Mains", holdable: true },
   { id: "desserts", label: "Desserts", holdable: true },
 ];
+
+// --- Sent items (FSR) ---
+
+export interface SentCourseGroup {
+  courseId: string;
+  courseLabel: string;
+  firedAt: string;
+  firedBy: string;
+  items: CartItem[];
+}
+
+export interface SentBatch {
+  id: string;
+  groups: SentCourseGroup[];
+}
 
 // Tab Types
 export type TabType = 'keypad' | 'library' | 'cafe';

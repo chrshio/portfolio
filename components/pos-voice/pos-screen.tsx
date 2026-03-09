@@ -3,43 +3,50 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AlertCircle, X } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
-import { MenuGridFSR } from "@/components/pos-fsr/menu-grid";
-import { CourseCartSection } from "@/components/pos-fsr/course-cart-section";
+import { MenuGrid } from "@/components/pos/menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
+import { CartSection } from "@/components/pos/cart-section";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
-import type { CartItem, MenuItem, SentBatch, SentCourseGroup } from "@/lib/pos-types";
-import { FSR_COURSES } from "@/lib/pos-types";
+import { VoiceOverlay, type VoiceMessage } from "./voice-overlay";
+import { useVoiceRecognition } from "@/hooks/use-voice-recognition";
+import { useVoiceOrder } from "@/hooks/use-voice-order";
+import type { CartItem, MenuItem } from "@/lib/pos-types";
 import {
+  featuredItems,
+  teaItems,
+  icedTeaItems,
+  bakeryItems,
+  beanItems,
+  merchItems,
+} from "@/lib/menu-library";
+import {
+  itemRequiresSelection,
   getDefaultModifiers,
   getModifierPriceDelta,
 } from "@/lib/modifiers";
-import { getMenuItemByIdFSR } from "@/lib/menu-library-fsr";
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
-const DEFAULT_COVER_COUNT = 4;
 
-/** Seat option for "add to table" (shared items). Always shown first in seating grid. */
-const TABLE_SEAT_OPTION = { id: "table", label: "Table" } as const;
-
-function buildSeatOptions(count: number) {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `seat-${i + 1}`,
-    label: `Seat ${i + 1}`,
-  }));
+function getMenuItemById(itemId: string): MenuItem | undefined {
+  const sources = [
+    featuredItems,
+    teaItems,
+    icedTeaItems,
+    bakeryItems,
+    beanItems,
+    merchItems,
+  ];
+  for (const list of sources) {
+    const found = list.find((i) => i.id === itemId);
+    if (found) return found;
+  }
+  return undefined;
 }
 
-export function POSScreenFSR() {
+export function POSScreenVoice() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [sentBatches, setSentBatches] = useState<SentBatch[]>([]);
-  const [activeCourseId, setActiveCourseId] = useState("apps");
-  const [courseHolds, setCourseHolds] = useState<Record<string, boolean>>({
-    "straight-fire": false,
-    apps: false,
-    mains: true,
-    desserts: true,
-  });
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftQuantity, setDraftQuantity] = useState(1);
@@ -63,15 +70,6 @@ export function POSScreenFSR() {
     serviceCharges: [],
   });
 
-  const [coverCount, setCoverCount] = useState(DEFAULT_COVER_COUNT);
-  const seatOptions = [TABLE_SEAT_OPTION, ...buildSeatOptions(coverCount)];
-
-  const handleAddSeat = useCallback(() => {
-    setCoverCount((c) => c + 1);
-  }, []);
-  const [addDraftSeatId, setAddDraftSeatId] = useState<string | null>(null);
-  const [editDraftSeatId, setEditDraftSeatId] = useState<string | null>(null);
-
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
@@ -80,6 +78,91 @@ export function POSScreenFSR() {
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
 
+  // ---- Voice mode ----
+  const [voiceMode, setVoiceMode] = useState(false);
+  const cartItemsRef = useRef(cartItems);
+  cartItemsRef.current = cartItems;
+
+  const handleAddItemByVoice = useCallback(
+    (itemId: string, modifiers?: string[]) => {
+      const menuItem = getMenuItemById(itemId);
+      if (!menuItem) return;
+      const uniqueId = `${menuItem.id}-${Date.now()}`;
+      setCartItems((prev) => [
+        ...prev,
+        {
+          id: uniqueId,
+          name: menuItem.name,
+          price: menuItem.price,
+          quantity: 1,
+          description: menuItem.description,
+          modifiers: modifiers?.length ? modifiers : undefined,
+          note: "",
+          fulfillmentMethod: "for-here",
+          taxes: [],
+          discounts: [],
+          serviceCharges: [],
+        },
+      ]);
+    },
+    []
+  );
+
+  const voiceOrder = useVoiceOrder({
+    onAddItem: handleAddItemByVoice,
+    getCartSnapshot: () =>
+      cartItemsRef.current.map((i) => ({
+        id: i.id,
+        name: i.name,
+        modifiers: i.modifiers,
+      })),
+  });
+
+  const handleFinalTranscript = useCallback(
+    (transcript: string) => {
+      if (!transcript.trim()) return;
+      voiceOrder.processTranscript(transcript);
+    },
+    [voiceOrder]
+  );
+
+  const voice = useVoiceRecognition({
+    onFinalTranscript: handleFinalTranscript,
+  });
+
+  const handleVoiceToggle = useCallback(() => {
+    setVoiceMode((prev) => {
+      if (!prev) {
+        setEditingItemId(null);
+        setAddingItem(null);
+        setAddToastMessage(null);
+        setAddScrollSignal(null);
+        setEditScrollSignal(null);
+        voiceOrder.reset();
+        voice.start();
+      } else {
+        voice.stop();
+      }
+      return !prev;
+    });
+  }, [voice, voiceOrder]);
+
+  // Merge interim transcript bubble into the voiceOrder messages for display
+  const voiceDisplayMessages: VoiceMessage[] = (() => {
+    const base = voiceOrder.messages;
+    if (!voiceMode || !voice.interimTranscript) return base;
+    return [
+      ...base,
+      {
+        id: "__interim__",
+        role: "customer" as const,
+        text: voice.interimTranscript,
+        isInterim: true,
+      },
+    ];
+  })();
+
+  // ---- Toast animation ----
   useEffect(() => {
     if (addToastMessage) {
       toastRafRef.current = requestAnimationFrame(() => {
@@ -99,6 +182,7 @@ export function POSScreenFSR() {
     return () => clearTimeout(t);
   }, [addToastMessage]);
 
+  // ---- Cart display items ----
   const draftCartItem: CartItem | null =
     addingItem && !isEditingMode
       ? {
@@ -108,8 +192,6 @@ export function POSScreenFSR() {
           quantity: addDraftQuantity,
           description: addingItem.description,
           modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
-          courseId: activeCourseId,
-          seatId: addDraftSeatId ?? undefined,
         }
       : null;
 
@@ -126,7 +208,6 @@ export function POSScreenFSR() {
           taxes: draftOptions.taxes,
           discounts: draftOptions.discounts,
           serviceCharges: draftOptions.serviceCharges,
-          seatId: editDraftSeatId ?? undefined,
         };
       })()
     : null;
@@ -147,14 +228,40 @@ export function POSScreenFSR() {
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
 
+  // ---- Menu / cart handlers ----
   const handleMenuItemSelect = useCallback((item: MenuItem) => {
     setEditingItemId(null);
     setEditScrollSignal(null);
-    setAddingItem(item);
-    setAddDraftQuantity(1);
-    setAddDraftModifiers(getDefaultModifiers(item));
-    setAddDraftSeatId(null);
-    setAddDraftOptions({ note: "", fulfillmentMethod: "for-here", taxes: [], discounts: [], serviceCharges: [] });
+    if (itemRequiresSelection(item)) {
+      setAddingItem(item);
+      setAddDraftQuantity(1);
+      setAddDraftModifiers(getDefaultModifiers(item));
+      setAddDraftOptions({ note: "", fulfillmentMethod: "for-here", taxes: [], discounts: [], serviceCharges: [] });
+    } else {
+      setCartItems((prev) => {
+        const existing = prev.find((c) => c.id === item.id);
+        if (existing) {
+          return prev.map((c) =>
+            c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: 1,
+            description: item.description,
+            note: "",
+            fulfillmentMethod: "for-here",
+            taxes: [],
+            discounts: [],
+            serviceCharges: [],
+          },
+        ];
+      });
+    }
   }, []);
 
   const handleAddConfirm = useCallback(() => {
@@ -174,34 +281,32 @@ export function POSScreenFSR() {
         taxes: addDraftOptions.taxes,
         discounts: addDraftOptions.discounts,
         serviceCharges: addDraftOptions.serviceCharges,
-        courseId: activeCourseId,
-        seatId: addDraftSeatId ?? undefined,
       },
     ]);
     setAddingItem(null);
-    setAddDraftSeatId(null);
-  }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, activeCourseId, addDraftSeatId]);
+  }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions]);
 
   const handleAddCancel = useCallback(() => {
     setAddingItem(null);
-    setAddDraftSeatId(null);
     setAddToastMessage(null);
     setAddScrollSignal(null);
   }, []);
+
+  const handleAddAttempt = useCallback(() => {
+    handleAddConfirm();
+  }, [handleAddConfirm]);
 
   const handleItemClick = useCallback(
     (id: string) => {
       const item = cartItems.find((i) => i.id === id);
       if (!item) return;
       setAddingItem(null);
-      setAddDraftSeatId(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
       setEditingItemId(id);
       setEditScrollSignal(null);
       setDraftQuantity(item.quantity);
       setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
-      setEditDraftSeatId(item.seatId ?? null);
       setDraftOptions({
         note: item.note ?? "",
         fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
@@ -222,14 +327,12 @@ export function POSScreenFSR() {
       const item = cartItems.find((i) => i.id === itemId);
       if (!item) return;
       setAddingItem(null);
-      setAddDraftSeatId(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
       if (editingItemId !== itemId) {
         setEditingItemId(itemId);
         setDraftQuantity(item.quantity);
         setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
-        setEditDraftSeatId(item.seatId ?? null);
         setDraftOptions({
           note: item.note ?? "",
           fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
@@ -261,14 +364,13 @@ export function POSScreenFSR() {
               taxes: draftOptions.taxes,
               discounts: draftOptions.discounts,
               serviceCharges: draftOptions.serviceCharges,
-              seatId: editDraftSeatId ?? undefined,
             }
           : item
       )
     );
     setEditingItemId(null);
     setEditScrollSignal(null);
-  }, [editingItemId, draftQuantity, draftModifiers, draftOptions, editDraftSeatId]);
+  }, [editingItemId, draftQuantity, draftModifiers, draftOptions]);
 
   const handleModifiersChange = useCallback((modifiers: string[]) => {
     setDraftModifiers(modifiers);
@@ -290,9 +392,7 @@ export function POSScreenFSR() {
 
   const handleRemoveCartItem = useCallback((id: string) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
-    if (editingItemId === id) {
-      setEditingItemId(null);
-    }
+    if (editingItemId === id) setEditingItemId(null);
   }, [editingItemId]);
 
   const handleClearCart = useCallback(() => {
@@ -301,60 +401,8 @@ export function POSScreenFSR() {
     setAddingItem(null);
   }, []);
 
-  const handleCourseHoldToggle = useCallback((courseId: string) => {
-    setCourseHolds((prev) => ({ ...prev, [courseId]: !prev[courseId] }));
-  }, []);
-
-  const handleActiveCourseChange = useCallback((courseId: string) => {
-    setActiveCourseId(courseId);
-    setEditingItemId(null);
-    setEditScrollSignal(null);
-    setAddingItem(null);
-    setAddToastMessage(null);
-    setAddScrollSignal(null);
-  }, []);
-
-  const handleSend = useCallback(() => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-
-    // Only send items from courses that are not on Hold (fire = send; hold = keep in cart)
-    const itemsToSend = cartItems.filter((item) => {
-      const cid = item.courseId ?? "straight-fire";
-      const course = FSR_COURSES.find((c) => c.id === cid);
-      if (!course?.holdable) return true; // straight-fire or non-holdable: always send
-      return !courseHolds[cid]; // holdable: send only if not held
-    });
-    const itemIdsToRemove = new Set(itemsToSend.map((i) => i.id));
-
-    if (itemsToSend.length === 0) return;
-
-    const grouped = new Map<string, CartItem[]>();
-    for (const item of itemsToSend) {
-      const cid = item.courseId ?? "straight-fire";
-      if (!grouped.has(cid)) grouped.set(cid, []);
-      grouped.get(cid)!.push(item);
-    }
-
-    const groups: SentCourseGroup[] = FSR_COURSES
-      .filter((c) => grouped.has(c.id))
-      .map((c) => ({
-        courseId: c.id,
-        courseLabel: c.label,
-        firedAt: timeStr,
-        firedBy: "You",
-        items: grouped.get(c.id)!,
-      }));
-
-    const batch: SentBatch = { id: `batch-${Date.now()}`, groups };
-    setSentBatches((prev) => [...prev, batch]);
-    setCartItems((prev) => prev.filter((item) => !itemIdsToRemove.has(item.id)));
-    if (editingItemId && itemIdsToRemove.has(editingItemId)) setEditingItemId(null);
-    setAddingItem(null);
-  }, [cartItems, courseHolds, editingItemId]);
-
-  const handlePrint = useCallback(() => {
-    console.log("Printing...", cartItems);
+  const handleSave = useCallback(() => {
+    console.log("Saving order...", cartItems);
   }, [cartItems]);
 
   const handlePay = useCallback(() => {
@@ -368,8 +416,9 @@ export function POSScreenFSR() {
       <StatusBar />
 
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
-          {editingItem ? (
+        {/* Left panel — menu / edit / add / voice overlay */}
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {editingItem && !voiceMode ? (
             <ItemEditPanel
               item={editingItem}
               draftQuantity={draftQuantity}
@@ -381,12 +430,8 @@ export function POSScreenFSR() {
               onCompItem={handleCompItem}
               onRemoveItem={handleRemoveItem}
               scrollSignal={editScrollSignal}
-              seats={seatOptions}
-              draftSeatId={editDraftSeatId}
-              onSeatChange={setEditDraftSeatId}
-              onAddSeat={handleAddSeat}
             />
-          ) : addingItem ? (
+          ) : addingItem && !voiceMode ? (
             <ItemAddPanel
               item={addingItem}
               onCancel={handleAddCancel}
@@ -397,24 +442,37 @@ export function POSScreenFSR() {
               onModifiersChange={setAddDraftModifiers}
               onOptionsChange={setAddDraftOptions}
               scrollSignal={addScrollSignal}
-              seats={seatOptions}
-              draftSeatId={addDraftSeatId}
-              onSeatChange={setAddDraftSeatId}
-              onAddSeat={handleAddSeat}
             />
           ) : (
-            <MenuGridFSR onAddItem={handleMenuItemSelect} />
+            <MenuGrid onAddItem={handleMenuItemSelect} />
           )}
+
+          {/* Voice overlay — renders on top of the menu grid with backdrop blur */}
+          {voiceMode && (
+            <VoiceOverlay
+              messages={voiceDisplayMessages.length > 0 ? voiceDisplayMessages : undefined}
+              isListening={voice.isListening}
+              isProcessing={voiceOrder.isProcessing}
+              error={voice.error}
+              onClose={handleVoiceToggle}
+              onSuggestionSelect={voiceOrder.handleSuggestionSelect}
+              analyserNode={voice.analyserNode}
+            />
+          )}
+
         </div>
 
+        {/* Right panel — cart */}
         <div className="w-[320px] flex-shrink-0">
-          <CourseCartSection
+          <CartSection
             items={displayItems}
-            activeCourseId={activeCourseId}
-            onActiveCourseChange={handleActiveCourseChange}
-            courseHolds={courseHolds}
-            onCourseHoldToggle={handleCourseHoldToggle}
+            subtotal={subtotal}
+            tax={tax}
+            total={total}
+            onSave={handleSave}
+            onPay={handlePay}
             editingItemId={editingItemId}
+            activeComboSlotId={null}
             onItemClick={handleItemClick}
             onRequirementClick={handleRequirementClick}
             onEditCancel={handleEditCancel}
@@ -422,16 +480,11 @@ export function POSScreenFSR() {
             isAddMode={!!addingItem && !isEditingMode}
             addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
             onAddCancel={handleAddCancel}
-            onAdd={handleAddConfirm}
+            onAdd={handleAddAttempt}
             onRemoveItem={handleRemoveCartItem}
             onClearCart={handleClearCart}
-            onSend={handleSend}
-            onPrint={handlePrint}
-            onPay={handlePay}
-            getMenuItemById={getMenuItemByIdFSR}
-            coverCount={coverCount}
-            seatingEnabled
-            sentBatches={sentBatches}
+            voiceMode={voiceMode}
+            onVoiceToggle={handleVoiceToggle}
           />
         </div>
       </div>

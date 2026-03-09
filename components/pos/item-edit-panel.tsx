@@ -178,6 +178,8 @@ interface ItemEditPanelProps {
   seats?: SeatOption[];
   draftSeatId?: string | null;
   onSeatChange?: (seatId: string) => void;
+  /** When provided, shows "Add seat" tile that adds a new seat and selects it. */
+  onAddSeat?: () => void;
 }
 
 export function ItemEditPanel({
@@ -202,6 +204,7 @@ export function ItemEditPanel({
   seats,
   draftSeatId,
   onSeatChange,
+  onAddSeat,
 }: ItemEditPanelProps) {
   const isCombo = !!comboDefinition;
 
@@ -477,6 +480,16 @@ export function ItemEditPanel({
                   </span>
                 </button>
               ))}
+              {onAddSeat && (
+                <button
+                  onClick={onAddSeat}
+                  className="relative flex flex-col justify-end h-[112px] w-full p-3 rounded-[12px] bg-[#f0f0f0] text-left transition-all active:scale-[0.97]"
+                >
+                  <span className="text-[16px] font-medium text-[#101010] leading-6 truncate">
+                    Add seat
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         )}
