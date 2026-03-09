@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GATE_STORAGE_KEY } from "@/lib/gate";
 import { LANDING_TEXT_COLOR } from "@/lib/contrast-from-background";
+import { LandingGradientCanvas } from "@/components/landing/landing-gradient-canvas";
 
 export function LandingPage() {
   const router = useRouter();
@@ -30,40 +31,8 @@ export function LandingPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-white">
-      {/* Three ovals: heights as % of viewport; 80% width with side padding */}
-      <div className="absolute inset-y-0 left-[10%] right-[10%]">
-        {/* First oval: 30vh */}
-        <div
-          className="absolute left-0 right-0 top-0 z-[3] h-[30vh] w-full"
-          style={{
-            background:
-              "linear-gradient(to bottom, #04DCFF 0%, #475ACB 70%, #475ACB 100%)",
-            borderRadius: "50%",
-            filter: "blur(40px)",
-            transform: "scaleX(1.2)",
-          }}
-        />
-        {/* Second oval: 50vh (starts below first) */}
-        <div
-          className="absolute left-0 right-0 top-[30vh] z-[2] h-[50vh] w-full"
-          style={{
-            background: "#FFF991",
-            borderRadius: "50%",
-            filter: "blur(35px)",
-            transform: "scaleX(1.2)",
-          }}
-        />
-        {/* Third oval: 28vh, solid #EADFD9, behind second */}
-        <div
-          className="absolute left-0 right-0 top-[72vh] z-[1] h-[28vh] w-full"
-          style={{
-            background: "#EADFD9",
-            borderRadius: "50%",
-            filter: "blur(45px)",
-            transform: "scaleX(1.2)",
-          }}
-        />
-      </div>
+      {/* Animated gradient background (canvas, all three colors blended) */}
+      <LandingGradientCanvas />
 
       {/* Glass overlay (Figma: backdrop-blur 34.35px, bg white 10%) */}
       <div
