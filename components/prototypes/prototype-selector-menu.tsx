@@ -148,7 +148,9 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
     <div className="flex justify-center pt-6 pb-1 -mb-24 z-10 relative">
       <div
         ref={variantBarRef}
-        className="flex h-11 items-center gap-1 rounded-full border-[1.4px] border-white/20 overflow-hidden p-1 min-w-[300px] max-w-[420px] w-max relative"
+        data-variant-selector-bar
+        className="grid h-11 items-center gap-1 rounded-full border-[1.4px] border-white/20 overflow-visible p-1 w-fit max-w-[min(520px,96vw)] relative"
+        style={{ gridAutoFlow: "column", gridAutoColumns: "max-content" }}
       >
         <div
           className="absolute inset-0 rounded-full pointer-events-none"
@@ -170,6 +172,8 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
         )}
         {currentProject!.prototypes.map((p, i) => {
           const isSelected = p.id === currentVariantId;
+          const label = variantShortLabel(p);
+          const paddingX = 8;
           return (
             <button
               key={p.id}
@@ -179,13 +183,19 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
               type="button"
               onClick={() => p.ready && router.push(p.path)}
               disabled={!p.ready}
+              style={{
+                width: "max-content",
+                minWidth: 60,
+                paddingLeft: paddingX,
+                paddingRight: paddingX,
+              }}
               className={cn(
-                "relative flex flex-1 cursor-pointer items-center justify-center h-9 min-w-[60px] px-4 rounded-full text-[13px] leading-4 overflow-hidden transition-colors",
+                "relative flex cursor-pointer items-center justify-center h-9 rounded-full text-[13px] leading-4 overflow-hidden transition-colors",
                 isSelected ? "text-white" : "text-white/60",
                 !p.ready && "cursor-not-allowed opacity-60"
               )}
             >
-              <span className="relative">{variantShortLabel(p)}</span>
+              <span className="relative whitespace-nowrap">{label}</span>
             </button>
           );
         })}

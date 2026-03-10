@@ -83,8 +83,18 @@ export function CartActionsModal({
                   !isFirst && "border-t border-[#f0f0f0]"
                 )}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-[#f0f0f0]">
-                  <Icon className="h-5 w-5 text-[#101010]" />
+                <div
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]",
+                    action.destructive ? "bg-[#fef2f2]" : "bg-[#f0f0f0]"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5",
+                      action.destructive ? "text-[#bf0020]" : "text-[#101010]"
+                    )}
+                  />
                 </div>
                 <span
                   className={cn(

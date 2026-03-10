@@ -167,7 +167,7 @@ export function SettingsPage({ variantLabel = "Standard" }: SettingsPageProps) {
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <SquareLogo />
           <span
-            className="tabular-nums text-[19px] font-normal text-[#101010]"
+            className="tabular-nums text-[24px] font-normal leading-[100%] text-[#101010]"
             style={{ fontFamily: 'var(--font-cash-sans-mono)' }}
           >
             {loadingProgress}%
@@ -297,7 +297,7 @@ export function SettingsPage({ variantLabel = "Standard" }: SettingsPageProps) {
       {/* Select mode sheet */}
       <Dialog open={modeSheetOpen} onOpenChange={setModeSheetOpen}>
         <DialogContent
-          className="top-auto bottom-4 left-1/2 translate-x-[-50%] translate-y-0 w-[464px] max-w-[min(464px,calc(100%-2rem))] flex flex-col items-center gap-0 border-0 p-0 shadow-xl bg-transparent"
+          className="top-auto bottom-4 left-1/2 translate-x-[-50%] translate-y-0 w-[664px] max-w-[min(664px,calc(100%-2rem))] flex flex-col items-center gap-0 border-0 p-0 shadow-xl bg-transparent"
           showCloseButton={false}
         >
           {/* Handle — outside sheet, above */}

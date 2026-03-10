@@ -39,6 +39,10 @@ interface CartSectionProps {
   onVoiceToggle?: () => void;
   /** Optional accessories (e.g. customer for retail) rendered below the cart header. */
   accessories?: React.ReactNode;
+  /** Order-level fulfillment label (e.g. "In store"); when set with onFulfillmentHeaderClick, shows fulfillment header above cart items (retail). */
+  orderFulfillmentLabel?: string;
+  /** Called when the fulfillment header is clicked to open fulfillment selection modal. */
+  onFulfillmentHeaderClick?: () => void;
 }
 
 export function CartSection({
@@ -69,11 +73,15 @@ export function CartSection({
   voiceMode,
   onVoiceToggle,
   accessories,
+  orderFulfillmentLabel,
+  onFulfillmentHeaderClick,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const isEditMode = editingItemId != null;
   const moreDisabled = isEditMode || !!isAddMode;
+  const showFulfillmentHeader =
+    items.length > 0 && orderFulfillmentLabel != null && onFulfillmentHeaderClick != null;
 
   if (items.length === 0) {
     return (
@@ -124,17 +132,51 @@ export function CartSection({
               {accessories}
             </div>
           )}
-          <CartItems
-            items={items}
-            editingItemId={editingItemId}
-            addingItemId={addingItemId}
-            activeComboSlotId={activeComboSlotId}
-            onItemClick={onItemClick}
-            onRequirementClick={onRequirementClick}
-            onRemoveItem={onRemoveItem}
-            getMenuItemById={getMenuItemById}
-            getComboDefinition={getComboDefinition}
-          />
+          {showFulfillmentHeader ? (
+            <div className="rounded-2xl overflow-hidden border border-[#e5e5e5]">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={onFulfillmentHeaderClick}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onFulfillmentHeaderClick?.();
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center justify-between pl-[18px] pr-4 pt-3 pb-1"
+                aria-label={`Fulfillment: ${orderFulfillmentLabel}. Select to change.`}
+              >
+                <span className="text-[14px] font-medium text-[#666666]">
+                  {orderFulfillmentLabel}
+                </span>
+              </div>
+              <CartItems
+                items={items}
+                editingItemId={editingItemId}
+                addingItemId={addingItemId}
+                activeComboSlotId={activeComboSlotId}
+                onItemClick={onItemClick}
+                onRequirementClick={onRequirementClick}
+                onRemoveItem={onRemoveItem}
+                getMenuItemById={getMenuItemById}
+                getComboDefinition={getComboDefinition}
+                bare
+              />
+            </div>
+          ) : (
+            <CartItems
+              items={items}
+              editingItemId={editingItemId}
+              addingItemId={addingItemId}
+              activeComboSlotId={activeComboSlotId}
+              onItemClick={onItemClick}
+              onRequirementClick={onRequirementClick}
+              onRemoveItem={onRemoveItem}
+              getMenuItemById={getMenuItemById}
+              getComboDefinition={getComboDefinition}
+            />
+          )}
           <PricingSummary subtotal={subtotal} tax={tax} total={total} isFaded={isEditMode || isAddMode} />
         </div>
       </div>

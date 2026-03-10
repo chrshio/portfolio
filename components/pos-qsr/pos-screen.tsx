@@ -17,7 +17,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition, NavItem } from "@/lib/pos-types";
+import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition, NavItem, MenuId } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -30,7 +30,10 @@ import {
   getDefaultComboSelections,
   getCategoryItems,
   getMenuItemById,
+  rootTilesQSR,
 } from "@/lib/menu-library-qsr";
+import { rootTilesFSR, getMenuItemByIdFSR } from "@/lib/menu-library-fsr";
+import { MenuSwitcherSheet } from "@/components/pos/menu-switcher-sheet";
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
@@ -115,6 +118,13 @@ export function POSScreenQSR() {
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
 
+  // Menu switcher: which menu is shown in the grid (Lunch = QSR data, Dinner = FSR data).
+  const [activeMenuId, setActiveMenuId] = useState<MenuId>("lunch");
+  const [menuSheetOpen, setMenuSheetOpen] = useState(false);
+  const rootTilesForGrid = activeMenuId === "lunch" ? rootTilesQSR : rootTilesFSR;
+  const getMenuItemByIdResolved = activeMenuId === "lunch" ? getMenuItemById : getMenuItemByIdFSR;
+  const menuLabel = activeMenuId === "lunch" ? "Lunch" : "Dinner";
+
   useEffect(() => {
     if (addToastMessage) {
       // Double-RAF so the element is in the DOM before the transition starts.
@@ -160,7 +170,7 @@ export function POSScreenQSR() {
     const slotsWithUnmet = getSlotsWithUnmetModifierRequirements(
       comboDef,
       addDraftComboSelections,
-      getMenuItemById
+      getMenuItemByIdResolved
     );
     if (slotsWithUnmet.includes(editingComboSlotId)) return;
     // Current slot is complete — auto-advance (same as tapping Done).
@@ -272,7 +282,7 @@ export function POSScreenQSR() {
       const comboDefForQueue = getComboDefinition(item.id);
       const defaultsForQueue = comboDefForQueue ? getDefaultComboSelections(comboDefForQueue) : {};
       const modifierQueue = comboDefForQueue
-        ? getSlotsWithUnmetModifierRequirements(comboDefForQueue, defaultsForQueue, getMenuItemById)
+        ? getSlotsWithUnmetModifierRequirements(comboDefForQueue, defaultsForQueue, getMenuItemByIdResolved)
         : [];
       setAddPendingModifierSlotQueue(modifierQueue);
     } else {
@@ -313,7 +323,7 @@ export function POSScreenQSR() {
       } else if (onboardingItem) {
         const comboDef = getComboDefinition(onboardingItem.id);
         const modifierSlotQueue = comboDef
-          ? getSlotsWithUnmetModifierRequirements(comboDef, newSelections, getMenuItemById)
+          ? getSlotsWithUnmetModifierRequirements(comboDef, newSelections, getMenuItemByIdResolved)
           : [];
         setOnboardingItem(null);
         setOnboardingSlotQueue([]);
@@ -592,7 +602,7 @@ export function POSScreenQSR() {
                   setEditDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
                 }}
                 getCategoryItems={getCategoryItems}
-                getMenuItemById={getMenuItemById}
+                getMenuItemById={getMenuItemByIdResolved}
                 editingComboSlotId={editingComboSlotId}
                 onBackFromSlotModify={() => setEditingComboSlotId(null)}
                 onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
@@ -614,7 +624,7 @@ export function POSScreenQSR() {
                 setAddDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
               }}
               getCategoryItems={getCategoryItems}
-              getMenuItemById={getMenuItemById}
+              getMenuItemById={getMenuItemByIdResolved}
               editingComboSlotId={editingComboSlotId}
               onBackFromSlotModify={handleAddSlotDone}
               onModifySlot={(slotId) => {
@@ -623,7 +633,12 @@ export function POSScreenQSR() {
               }}
             />
           ) : (
-            <MenuGridQSR onAddItem={handleMenuItemSelect} />
+            <MenuGridQSR
+              onAddItem={handleMenuItemSelect}
+              rootTiles={rootTilesForGrid}
+              menuLabel={menuLabel}
+              onOpenMenuSwitcher={() => setMenuSheetOpen(true)}
+            />
           )}
         </div>
 
@@ -650,7 +665,7 @@ export function POSScreenQSR() {
             onAddSlotDone={handleAddSlotDone}
             onRemoveItem={handleRemoveCartItem}
             onClearCart={handleClearCart}
-            getMenuItemById={getMenuItemById}
+            getMenuItemById={getMenuItemByIdResolved}
             getComboDefinition={getComboDefinition}
           />
           </div>
@@ -658,6 +673,16 @@ export function POSScreenQSR() {
       )}
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <MenuSwitcherSheet
+        open={menuSheetOpen}
+        onOpenChange={setMenuSheetOpen}
+        selectedMenuId={activeMenuId}
+        onSelect={(menuId) => {
+          setActiveMenuId(menuId);
+          setMenuSheetOpen(false);
+        }}
+      />
 
       {/* Combo onboarding: consecutive category pickers before the add panel */}
       {(() => {

@@ -68,7 +68,7 @@ function CourseHeader({
       }}
       className="flex w-full cursor-pointer items-center justify-between pl-[18px] pr-4 py-2"
     >
-      <span className="text-[14px] font-semibold text-[#666666]">
+      <span className="text-[14px] font-medium text-[#666666]">
         {course.label}
         {itemCount > 0 && (
           <span className="text-[#666666] font-medium"> ({itemCount})</span>

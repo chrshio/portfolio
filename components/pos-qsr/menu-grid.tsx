@@ -4,21 +4,25 @@ import { useState } from "react";
 import { Search, Book, ArrowLeft, ChevronRight } from "lucide-react";
 import { MenuTile } from "@/components/pos/menu-tile";
 import type { Tile, MenuItem, MenuCategory } from "@/lib/pos-types";
-import { rootTilesQSR } from "@/lib/menu-library-qsr";
 import { cn } from "@/lib/utils";
 
 interface MenuGridQSRProps {
   onAddItem: (item: MenuItem) => void;
+  /** Tiles to show in the grid (Lunch or Dinner menu). */
+  rootTiles: Tile[];
+  /** Label for the current menu (e.g. "Lunch", "Dinner") for tabs and breadcrumb. */
+  menuLabel: string;
+  /** Called when the user taps the Menu (book) button to switch menus. */
+  onOpenMenuSwitcher?: () => void;
 }
 
-const tabs = [
+const KEYPAD_LIBRARY_TABS = [
   { id: "keypad", label: "Keypad" },
   { id: "library", label: "Library" },
-  { id: "lunch", label: "Lunch" },
 ];
 
-export function MenuGridQSR({ onAddItem }: MenuGridQSRProps) {
-  const [activeTab, setActiveTab] = useState("lunch");
+export function MenuGridQSR({ onAddItem, rootTiles, menuLabel, onOpenMenuSwitcher }: MenuGridQSRProps) {
+  const [activeTab, setActiveTab] = useState("menu");
   const [selectedCategory, setSelectedCategory] = useState<MenuCategory | null>(null);
 
   const handleTileClick = (tile: Tile) => {
@@ -32,9 +36,10 @@ export function MenuGridQSR({ onAddItem }: MenuGridQSRProps) {
     }
   };
 
+  const tabs = [...KEYPAD_LIBRARY_TABS, { id: "menu", label: menuLabel }];
   const gridTiles: Tile[] = selectedCategory
     ? (selectedCategory.items ?? [])
-    : rootTilesQSR;
+    : rootTiles;
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -55,7 +60,7 @@ export function MenuGridQSR({ onAddItem }: MenuGridQSRProps) {
                 onClick={() => setSelectedCategory(null)}
                 className="text-[19px] font-semibold text-[#959595] pb-2 transition-colors active:text-[#666]"
               >
-                Lunch
+                {menuLabel}
               </button>
               <ChevronRight className="w-4 h-4 text-[#c8c8c8] shrink-0 mb-[9px]" />
               <span className="text-[19px] font-semibold text-[#101010] pb-2 border-b-2 border-[#101010] -mb-px">
@@ -83,10 +88,15 @@ export function MenuGridQSR({ onAddItem }: MenuGridQSRProps) {
         )}
 
         <div className="flex items-center gap-4">
-          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors">
+          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors active:bg-[#e0e0e0]">
             <Search className="w-5 h-5 text-[#101010]" />
           </button>
-          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors" aria-label="Menu">
+          <button
+            type="button"
+            onClick={onOpenMenuSwitcher}
+            className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors active:bg-[#e0e0e0]"
+            aria-label="Menu"
+          >
             <Book className="w-5 h-5 text-[#101010]" />
           </button>
         </div>

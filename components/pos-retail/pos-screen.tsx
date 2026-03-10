@@ -9,9 +9,16 @@ import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
 import { CartAccessoryCustomer } from "@/components/pos/cart-accessory-customer";
 import { AddCustomerModal } from "@/components/pos/add-customer-modal";
+import { FulfillmentMethodModal } from "@/components/pos-retail/fulfillment-method-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
-import type { CartItem, Customer, MenuItem, NavItem } from "@/lib/pos-types";
+import {
+  type CartItem,
+  type Customer,
+  type MenuItem,
+  type NavItem,
+  RETAIL_ORDER_FULFILLMENTS,
+} from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -64,6 +71,9 @@ export function POSScreenRetail({
 
   const [cartCustomer, setCartCustomer] = useState<Customer | null>(null);
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+
+  const [orderFulfillment, setOrderFulfillment] = useState<string>("in-store");
+  const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
 
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
@@ -417,6 +427,10 @@ export function POSScreenRetail({
                   onAddCustomer={() => setAddCustomerModalOpen(true)}
                 />
               }
+              orderFulfillmentLabel={
+                RETAIL_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? "In store"
+              }
+              onFulfillmentHeaderClick={() => setFulfillmentModalOpen(true)}
             />
           </div>
         </div>
@@ -446,6 +460,13 @@ export function POSScreenRetail({
         open={addCustomerModalOpen}
         onOpenChange={setAddCustomerModalOpen}
         onSelectCustomer={setCartCustomer}
+      />
+
+      <FulfillmentMethodModal
+        open={fulfillmentModalOpen}
+        onOpenChange={setFulfillmentModalOpen}
+        selectedId={orderFulfillment}
+        onSelect={setOrderFulfillment}
       />
     </div>
   );

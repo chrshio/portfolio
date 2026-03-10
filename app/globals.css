@@ -115,6 +115,12 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Variant selector: each pill is content-sized, not equal width */
+[data-variant-selector-bar] button {
+  width: max-content !important;
+  box-sizing: content-box;
+}
+
 /* Hide scrollbar while keeping scroll behavior */
 .scrollbar-hide {
   scrollbar-width: none;

@@ -9,13 +9,15 @@ import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
-import type { CartItem, MenuItem, SentBatch, SentCourseGroup, NavItem } from "@/lib/pos-types";
+import type { CartItem, MenuItem, SentBatch, SentCourseGroup, NavItem, MenuId } from "@/lib/pos-types";
 import { FSR_COURSES } from "@/lib/pos-types";
 import {
   getDefaultModifiers,
   getModifierPriceDelta,
 } from "@/lib/modifiers";
-import { getMenuItemByIdFSR } from "@/lib/menu-library-fsr";
+import { getMenuItemByIdFSR, rootTilesFSR } from "@/lib/menu-library-fsr";
+import { getMenuItemById, rootTilesQSR } from "@/lib/menu-library-qsr";
+import { MenuSwitcherSheet } from "@/components/pos/menu-switcher-sheet";
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
@@ -81,6 +83,12 @@ export function POSScreenFSR() {
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
+
+  const [activeMenuId, setActiveMenuId] = useState<MenuId>("dinner");
+  const [menuSheetOpen, setMenuSheetOpen] = useState(false);
+  const rootTilesForGrid = activeMenuId === "dinner" ? rootTilesFSR : rootTilesQSR;
+  const getMenuItemByIdResolved = activeMenuId === "dinner" ? getMenuItemByIdFSR : getMenuItemById;
+  const menuLabel = activeMenuId === "dinner" ? "Dinner" : "Lunch";
 
   useEffect(() => {
     if (addToastMessage) {
@@ -408,7 +416,12 @@ export function POSScreenFSR() {
               onAddSeat={handleAddSeat}
             />
           ) : (
-            <MenuGridFSR onAddItem={handleMenuItemSelect} />
+            <MenuGridFSR
+              onAddItem={handleMenuItemSelect}
+              rootTiles={rootTilesForGrid}
+              menuLabel={menuLabel}
+              onOpenMenuSwitcher={() => setMenuSheetOpen(true)}
+            />
           )}
         </div>
 
@@ -433,7 +446,7 @@ export function POSScreenFSR() {
             onSend={handleSend}
             onPrint={handlePrint}
             onPay={handlePay}
-            getMenuItemById={getMenuItemByIdFSR}
+            getMenuItemById={getMenuItemByIdResolved}
             coverCount={coverCount}
             seatingEnabled
             sentBatches={sentBatches}
@@ -443,6 +456,16 @@ export function POSScreenFSR() {
       )}
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <MenuSwitcherSheet
+        open={menuSheetOpen}
+        onOpenChange={setMenuSheetOpen}
+        selectedMenuId={activeMenuId}
+        onSelect={(menuId) => {
+          setActiveMenuId(menuId);
+          setMenuSheetOpen(false);
+        }}
+      />
 
       {addToastMessage && (
         <div

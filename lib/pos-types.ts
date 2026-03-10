@@ -1,6 +1,9 @@
 // POS Tile Types
 export type TileType = 'item' | 'category' | 'action' | 'discount';
 
+/** Menu identifier for the grid switcher (Lunch = QSR menu, Dinner = FSR menu). */
+export type MenuId = "lunch" | "dinner";
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -143,6 +146,19 @@ export const FSR_COURSES: CourseDefinition[] = [
   { id: "apps", label: "Apps", holdable: true },
   { id: "mains", label: "Mains", holdable: true },
   { id: "desserts", label: "Desserts", holdable: true },
+];
+
+// --- Order-level fulfillments (retail) ---
+
+export interface RetailOrderFulfillment {
+  id: string;
+  label: string;
+}
+
+export const RETAIL_ORDER_FULFILLMENTS: RetailOrderFulfillment[] = [
+  { id: "in-store", label: "In store" },
+  { id: "shipment", label: "Shipment" },
+  { id: "pickup", label: "Pickup" },
 ];
 
 // --- Sent items (FSR) ---
