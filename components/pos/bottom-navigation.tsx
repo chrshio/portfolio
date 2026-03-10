@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   LayoutGrid,
   ArrowLeftRight,
@@ -25,29 +24,33 @@ const navItems: NavItemConfig[] = [
   { id: "more", label: "More", icon: Menu },
 ];
 
-export function BottomNavigation() {
-  const [activeNav, setActiveNav] = useState<NavItem>("checkout");
+const enabledTabs: Set<NavItem> = new Set(["checkout", "more"]);
 
+interface BottomNavigationProps {
+  activeTab?: NavItem;
+  onTabChange?: (tab: NavItem) => void;
+}
+
+export function BottomNavigation({ activeTab = "checkout", onTabChange }: BottomNavigationProps) {
   return (
     <nav className="flex items-center justify-center gap-2 px-4 py-2 bg-[#ffffff] border-t border-[#f0f0f0]">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive = activeNav === item.id;
-
-        const isCheckout = item.id === "checkout";
+        const isActive = activeTab === item.id;
+        const isEnabled = enabledTabs.has(item.id);
 
         return (
           <button
             key={item.id}
             type="button"
-            onClick={() => isCheckout && setActiveNav(item.id)}
-            disabled={!isCheckout}
+            onClick={() => isEnabled && onTabChange?.(item.id)}
+            disabled={!isEnabled}
             className={cn(
               "flex items-center gap-2 px-5 py-2.5 rounded-full transition-all",
               isActive
                 ? "bg-[#f0f0f0] text-[#101010]"
                 : "text-[#666666]",
-              !isCheckout && "pointer-events-none disabled:opacity-100 disabled:cursor-default"
+              !isEnabled && "pointer-events-none disabled:opacity-100 disabled:cursor-default"
             )}
           >
             <Icon className="w-5 h-5" />

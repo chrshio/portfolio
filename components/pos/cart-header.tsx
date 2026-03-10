@@ -23,7 +23,7 @@ export function CartHeader({ itemCount, orderLabel, subtitle, disabled, onMoreCl
             : `${itemCount} ${itemCount === 1 ? "item" : "items"}`)}
         </h2>
         {subtitle && (
-          <p className="text-[16px] text-[#666] leading-6">{subtitle}</p>
+          <p className="text-[16px] text-[#666] leading-5">{subtitle}</p>
         )}
       </div>
       <button

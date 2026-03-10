@@ -37,6 +37,8 @@ interface CartSectionProps {
   getComboDefinition?: (menuItemId: string) => ComboDefinition | null;
   voiceMode?: boolean;
   onVoiceToggle?: () => void;
+  /** Optional accessories (e.g. customer for retail) rendered below the cart header. */
+  accessories?: React.ReactNode;
 }
 
 export function CartSection({
@@ -66,6 +68,7 @@ export function CartSection({
   getComboDefinition,
   voiceMode,
   onVoiceToggle,
+  accessories,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -76,7 +79,15 @@ export function CartSection({
     return (
       <div className="flex flex-col h-full bg-white pr-6">
         <CartHeader itemCount={0} onMoreClick={() => setActionsOpen(true)} />
-        <div className="flex-1 min-h-0" />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex flex-col gap-4">
+            {accessories && (
+              <div className="flex flex-col gap-4">
+                {accessories}
+              </div>
+            )}
+          </div>
+        </div>
         {onVoiceToggle && (
           <div className="mt-auto">
             <CartFooter
@@ -106,8 +117,13 @@ export function CartSection({
         onMoreClick={moreDisabled ? undefined : () => setActionsOpen(true)}
       />
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col gap-4">
+          {accessories && (
+            <div className="flex flex-col gap-4">
+              {accessories}
+            </div>
+          )}
           <CartItems
             items={items}
             editingItemId={editingItemId}

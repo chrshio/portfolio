@@ -9,6 +9,7 @@ import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
+import { SettingsPage } from "@/components/pos/settings-page";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition } from "@/lib/pos-types";
+import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition, NavItem } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -56,6 +57,7 @@ function getSlotsWithUnmetModifierRequirements(
 }
 
 export function POSScreenQSR() {
+  const [activeTab, setActiveTab] = useState<NavItem>("checkout");
   const cloneSelection = (selection?: { itemId: string; modifiers?: string[] }) =>
     selection
       ? {
@@ -567,32 +569,35 @@ export function POSScreenQSR() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
-          {editingItem ? (
-            <ItemEditPanel
-              item={editingItem}
-              draftQuantity={draftQuantity}
-              draftModifiers={draftModifiers}
-              draftOptions={draftOptions}
-              onQuantityChange={setDraftQuantity}
-              onModifiersChange={handleModifiersChange}
-              onOptionsChange={handleOptionsChange}
-              onCompItem={handleCompItem}
-              onRemoveItem={handleRemoveItem}
-              scrollSignal={editScrollSignal}
-              comboDefinition={editingItem.menuItemId ? getComboDefinition(editingItem.menuItemId) ?? undefined : undefined}
-              draftComboSelections={editDraftComboSelections}
-              onComboSelectionsChange={(slotId, selection) => {
-                setEditDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
-              }}
-              getCategoryItems={getCategoryItems}
-              getMenuItemById={getMenuItemById}
-              editingComboSlotId={editingComboSlotId}
-              onBackFromSlotModify={() => setEditingComboSlotId(null)}
-              onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
-            />
-          ) : addingItem ? (
+      {activeTab === "more" ? (
+        <SettingsPage variantLabel="QSR" />
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 flex flex-col min-w-0">
+            {editingItem ? (
+              <ItemEditPanel
+                item={editingItem}
+                draftQuantity={draftQuantity}
+                draftModifiers={draftModifiers}
+                draftOptions={draftOptions}
+                onQuantityChange={setDraftQuantity}
+                onModifiersChange={handleModifiersChange}
+                onOptionsChange={handleOptionsChange}
+                onCompItem={handleCompItem}
+                onRemoveItem={handleRemoveItem}
+                scrollSignal={editScrollSignal}
+                comboDefinition={editingItem.menuItemId ? getComboDefinition(editingItem.menuItemId) ?? undefined : undefined}
+                draftComboSelections={editDraftComboSelections}
+                onComboSelectionsChange={(slotId, selection) => {
+                  setEditDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
+                }}
+                getCategoryItems={getCategoryItems}
+                getMenuItemById={getMenuItemById}
+                editingComboSlotId={editingComboSlotId}
+                onBackFromSlotModify={() => setEditingComboSlotId(null)}
+                onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
+              />
+            ) : addingItem ? (
             <ItemAddPanel
               item={addingItem}
               onCancel={handleAddCancel}
@@ -648,10 +653,11 @@ export function POSScreenQSR() {
             getMenuItemById={getMenuItemById}
             getComboDefinition={getComboDefinition}
           />
+          </div>
         </div>
-      </div>
+      )}
 
-      <BottomNavigation />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Combo onboarding: consecutive category pickers before the add panel */}
       {(() => {

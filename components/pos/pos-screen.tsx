@@ -8,7 +8,8 @@ import { ItemEditPanel, type DraftItemOptions } from "./item-edit-panel";
 import { ItemAddPanel } from "./item-add-panel";
 import { CartSection } from "./cart-section";
 import { BottomNavigation } from "./bottom-navigation";
-import type { CartItem, MenuItem } from "@/lib/pos-types";
+import { SettingsPage } from "./settings-page";
+import type { CartItem, MenuItem, NavItem } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -19,6 +20,7 @@ const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
 
 export function POSScreen() {
+  const [activeTab, setActiveTab] = useState<NavItem>("checkout");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -316,63 +318,67 @@ export function POSScreen() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
-          {editingItem ? (
-            <ItemEditPanel
-              item={editingItem}
-              draftQuantity={draftQuantity}
-              draftModifiers={draftModifiers}
-              draftOptions={draftOptions}
-              onQuantityChange={setDraftQuantity}
-              onModifiersChange={handleModifiersChange}
-              onOptionsChange={handleOptionsChange}
-              onCompItem={handleCompItem}
-              onRemoveItem={handleRemoveItem}
-              scrollSignal={editScrollSignal}
-            />
-          ) : addingItem ? (
-            <ItemAddPanel
-              item={addingItem}
-              onCancel={handleAddCancel}
-              draftQuantity={addDraftQuantity}
-              draftModifiers={addDraftModifiers}
-              draftOptions={addDraftOptions}
-              onQuantityChange={setAddDraftQuantity}
-              onModifiersChange={setAddDraftModifiers}
-              onOptionsChange={setAddDraftOptions}
-              scrollSignal={addScrollSignal}
-            />
-          ) : (
-            <MenuGrid onAddItem={handleMenuItemSelect} />
-          )}
-        </div>
+      {activeTab === "more" ? (
+        <SettingsPage variantLabel="Standard" />
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 flex flex-col min-w-0">
+            {editingItem ? (
+              <ItemEditPanel
+                item={editingItem}
+                draftQuantity={draftQuantity}
+                draftModifiers={draftModifiers}
+                draftOptions={draftOptions}
+                onQuantityChange={setDraftQuantity}
+                onModifiersChange={handleModifiersChange}
+                onOptionsChange={handleOptionsChange}
+                onCompItem={handleCompItem}
+                onRemoveItem={handleRemoveItem}
+                scrollSignal={editScrollSignal}
+              />
+            ) : addingItem ? (
+              <ItemAddPanel
+                item={addingItem}
+                onCancel={handleAddCancel}
+                draftQuantity={addDraftQuantity}
+                draftModifiers={addDraftModifiers}
+                draftOptions={addDraftOptions}
+                onQuantityChange={setAddDraftQuantity}
+                onModifiersChange={setAddDraftModifiers}
+                onOptionsChange={setAddDraftOptions}
+                scrollSignal={addScrollSignal}
+              />
+            ) : (
+              <MenuGrid onAddItem={handleMenuItemSelect} />
+            )}
+          </div>
 
-        <div className="w-[320px] flex-shrink-0">
-          <CartSection
-            items={displayItems}
-            subtotal={subtotal}
-            tax={tax}
-            total={total}
-            onSave={handleSave}
-            onPay={handlePay}
-            editingItemId={editingItemId}
-            activeComboSlotId={null}
-            onItemClick={handleItemClick}
-            onRequirementClick={handleRequirementClick}
-            onEditCancel={handleEditCancel}
-            onEditDone={handleEditDone}
-            isAddMode={!!addingItem && !isEditingMode}
-            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-            onAddCancel={handleAddCancel}
-            onAdd={handleAddAttempt}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-          />
+          <div className="w-[320px] flex-shrink-0">
+            <CartSection
+              items={displayItems}
+              subtotal={subtotal}
+              tax={tax}
+              total={total}
+              onSave={handleSave}
+              onPay={handlePay}
+              editingItemId={editingItemId}
+              activeComboSlotId={null}
+              onItemClick={handleItemClick}
+              onRequirementClick={handleRequirementClick}
+              onEditCancel={handleEditCancel}
+              onEditDone={handleEditDone}
+              isAddMode={!!addingItem && !isEditingMode}
+              addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+              onAddCancel={handleAddCancel}
+              onAdd={handleAddAttempt}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      <BottomNavigation />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Toast — centered above the bottom nav bar, slides up from below */}
       {addToastMessage && (

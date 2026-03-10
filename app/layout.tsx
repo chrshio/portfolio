@@ -40,6 +40,12 @@ const cashSans = localFont({
   display: 'swap',
 });
 
+const cashSansMono = localFont({
+  src: '../public/fonts/CashSansMono-Regular.woff2',
+  variable: '--font-cash-sans-mono',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Chris Liu',
   description: 'Chris Liu is a product designer in Brooklyn, NY.',
@@ -55,7 +61,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${cashSans.variable} font-sans antialiased`}>
+      <body className={`${cashSans.variable} ${cashSansMono.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>

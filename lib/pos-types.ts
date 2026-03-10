@@ -10,6 +10,8 @@ export interface MenuItem {
   soldOut?: boolean;
   category?: string;
   description?: string;
+  /** When 'contain', image fits inside tile with gray background (e.g. wine bottles). */
+  imageFit?: 'cover' | 'contain';
 }
 
 /** Optional variant for category tile styling (e.g. colored backgrounds in retail). */
@@ -19,6 +21,7 @@ export type MenuCategoryVariant =
   | 'blue'
   | 'amber'
   | 'rose'
+  | 'pink'
   | 'slate'
   | 'teal';
 
@@ -105,6 +108,25 @@ export interface Cart {
   subtotal: number;
   tax: number;
   total: number;
+}
+
+// --- Cart accessories (e.g. customer for retail) ---
+
+export type CartAccessoryKind = "customer";
+
+export interface CartAccessory {
+  id: string;
+  kind: CartAccessoryKind;
+}
+
+/** Customer from database — used for attaching to cart (e.g. retail). */
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  /** Loyalty stars for display in cart. */
+  stars?: number;
 }
 
 // --- Coursing (FSR) ---

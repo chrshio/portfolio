@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Book, ArrowLeft, ChevronRight } from "lucide-react";
+import { Search, ArrowLeft, ChevronRight } from "lucide-react";
 import { MenuTile } from "./menu-tile";
 import type { Tile, TabType, MenuItem, MenuCategory } from "@/lib/pos-types";
 import {
@@ -20,10 +20,10 @@ interface MenuGridProps {
 const tabs: { id: TabType; label: string }[] = [
   { id: "keypad", label: "Keypad" },
   { id: "library", label: "Library" },
-  { id: "cafe", label: "Cafe" },
+  { id: "cafe", label: "Favorites" },
 ];
 
-// Flat list of all tiles shown on the root Cafe grid.
+// Flat list of all tiles shown on the root Favorites grid (standard mode).
 const rootTiles: Tile[] = [
   ...featuredItems,
   ...categories,
@@ -71,7 +71,7 @@ export function MenuGrid({ onAddItem }: MenuGridProps) {
                 onClick={() => setSelectedCategory(null)}
                 className="text-[19px] font-semibold text-[#959595] pb-2 transition-colors hover:text-[#666]"
               >
-                Cafe
+                Favorites
               </button>
               <ChevronRight className="w-4 h-4 text-[#c8c8c8] shrink-0 mb-[9px]" />
               <span className="text-[19px] font-semibold text-[#101010] pb-2 border-b-2 border-[#101010] -mb-px">
@@ -99,13 +99,10 @@ export function MenuGrid({ onAddItem }: MenuGridProps) {
           </div>
         )}
 
-        {/* Action buttons — always visible */}
+        {/* Action buttons — Search only (no menu button in standard mode) */}
         <div className="flex items-center gap-4">
-          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors">
+          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors" aria-label="Search">
             <Search className="w-5 h-5 text-[#101010]" />
-          </button>
-          <button className="w-14 h-14 flex flex-col justify-center items-center rounded-full bg-[#f0f0f0] transition-colors" aria-label="Menu">
-            <Book className="w-5 h-5 text-[#101010]" />
           </button>
         </div>
       </div>

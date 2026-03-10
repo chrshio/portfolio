@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search, ArrowLeft, ChevronRight } from "lucide-react";
 import { MenuTile } from "@/components/pos/menu-tile";
 import type { Tile, MenuItem, MenuCategory } from "@/lib/pos-types";
-import { rootTilesRetail } from "@/lib/menu-library-retail";
+import { favoritesCategories } from "@/lib/menu-library-retail";
 import { cn } from "@/lib/utils";
 
 interface MenuGridRetailProps {
@@ -16,6 +16,21 @@ const tabs = [
   { id: "library", label: "Library" },
   { id: "favorites", label: "Favorites" },
 ];
+
+/** Merch IDs to show in the main favorites grid (priority order). */
+const FAVORITE_MERCH_IDS = ["water-bottle", "house-cap", "sauna-hat"];
+
+const WINE_CATEGORY_IDS = new Set(["reds", "whites", "rose", "sparkling"]);
+const FEATURED_WINE_COUNT = 3;
+
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 export function MenuGridRetail({ onAddItem }: MenuGridRetailProps) {
   const [activeTab, setActiveTab] = useState("favorites");
@@ -34,7 +49,30 @@ export function MenuGridRetail({ onAddItem }: MenuGridRetailProps) {
 
   const gridTiles: Tile[] = selectedCategory
     ? (selectedCategory.items ?? [])
-    : rootTilesRetail;
+    : [];
+
+  const showFavoritesByColumn = !selectedCategory && activeTab === "favorites";
+
+  /** Per-category items to show in the main favorites grid: 2–3 random wines, 4 priority merch. */
+  const featuredItemsByCategory = useMemo(() => {
+    const map = new Map<string, MenuItem[]>();
+    for (const cat of favoritesCategories) {
+      const items = cat.items ?? [];
+      if (cat.id === "merch") {
+        const featured = FAVORITE_MERCH_IDS.map((id) => items.find((i) => i.id === id)).filter(
+          (i): i is MenuItem => i != null
+        );
+        map.set(cat.id, featured);
+      } else if (WINE_CATEGORY_IDS.has(cat.id)) {
+        const shuffled = shuffle(items);
+        const count = cat.id === "sparkling" ? 2 : FEATURED_WINE_COUNT;
+        map.set(cat.id, shuffled.slice(0, count));
+      } else {
+        map.set(cat.id, items);
+      }
+    }
+    return map;
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -94,11 +132,24 @@ export function MenuGridRetail({ onAddItem }: MenuGridRetailProps) {
 
       {/* Scrollable grid */}
       <div className="flex-1 overflow-y-auto scrollbar-hide pl-4 pr-6 pb-4">
-        <div className="grid grid-cols-5 gap-3">
-          {gridTiles.map((tile) => (
-            <MenuTile key={tile.id} tile={tile} onClick={handleTileClick} />
-          ))}
-        </div>
+        {showFavoritesByColumn ? (
+          <div className="grid grid-cols-5 gap-3">
+            {favoritesCategories.map((cat) => (
+              <div key={cat.id} className="flex flex-col gap-3">
+                <MenuTile tile={cat} onClick={handleTileClick} />
+                {(featuredItemsByCategory.get(cat.id) ?? []).map((item) => (
+                  <MenuTile key={item.id} tile={item} onClick={handleTileClick} />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 gap-3">
+            {gridTiles.map((tile) => (
+              <MenuTile key={tile.id} tile={tile} onClick={handleTileClick} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

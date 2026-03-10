@@ -23,11 +23,12 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
         const variant = cat.variant ?? "default";
         // Palette (retail only): colored variants; default keeps other prototypes (FSR, QSR) as black
         const categoryVariants: Record<string, string> = {
-          default: "bg-[#101010] text-[#ffffff]",
-          green: "bg-[#166534] text-[#ffffff]", // dark green
+          default: "bg-[#101010] text-[#ffffff]", // black (Sparkling)
+          green: "bg-[#166534] text-[#ffffff]", // dark green (Whites)
           blue: "bg-[#1d4ed8] text-[#ffffff]", // blue
           amber: "bg-[#b45309] text-[#ffffff]", // light brown / caramel
-          rose: "bg-[#dc2626] text-[#ffffff]", // bright red
+          rose: "bg-[#dc2626] text-[#ffffff]", // red (Reds)
+          pink: "bg-[#db2777] text-[#ffffff]", // pink (Rosé)
           slate: "bg-[#6d28d9] text-[#ffffff]", // purple
           teal: "bg-[#0d9488] text-[#ffffff]", // teal / aqua green
         };
@@ -51,6 +52,9 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
           return "bg-[#f0f0f0] text-[#959595] cursor-not-allowed opacity-60";
         }
         if (itemTile.image) {
+          if (itemTile.imageFit === "contain") {
+            return "bg-[#e8e8e8] text-[#ffffff] overflow-hidden";
+          }
           return "bg-[#f3f3f3] text-[#ffffff] overflow-hidden";
         }
         if (itemTile.category === "bakery") {
@@ -70,6 +74,7 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
     if (tile.type === "item") {
       const item = tile as MenuItem;
       if (item.image) {
+        const objectFit = item.imageFit === "contain" ? "object-contain" : "object-cover";
         return (
           <div className="relative w-full h-full">
             <Image
@@ -77,7 +82,7 @@ export function MenuTile({ tile, onClick }: MenuTileProps) {
               alt={item.name}
               fill
               loading="eager"
-              className="object-cover"
+              className={objectFit}
             />
             {/* Gradient overlay per Figma: dark at bottom for text legibility */}
             <div

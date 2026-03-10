@@ -9,7 +9,7 @@ const VARIANT_SELECTOR_MIN_HEIGHT = 950;
 
 function variantShortLabel(item: PrototypeItem): string {
   const map: Record<string, string> = {
-    cafe: "Cafe",
+    cafe: "Standard",
     qsr: "QSR",
     fsr: "FSR",
     retail: "Retail",
@@ -30,6 +30,8 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const leftButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [leftPillStyle, setLeftPillStyle] = useState<{ top: number; height: number; left: number; width: number } | null>(null);
+  const [leftHoverIndex, setLeftHoverIndex] = useState<number | null>(null);
+  const [leftHoverPillStyle, setLeftHoverPillStyle] = useState<{ top: number; height: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-height: ${VARIANT_SELECTOR_MIN_HEIGHT}px)`);
@@ -124,11 +126,29 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
     return () => ro.disconnect();
   }, [selectedProjectIndex, currentProjectId]);
 
+  useLayoutEffect(() => {
+    if (leftHoverIndex === null) {
+      setLeftHoverPillStyle(null);
+      return;
+    }
+    const panel = leftPanelRef.current;
+    const button = leftButtonRefs.current[leftHoverIndex];
+    if (!panel || !button) return;
+    const panelRect = panel.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    setLeftHoverPillStyle({
+      top: buttonRect.top - panelRect.top,
+      height: buttonRect.height,
+      left: buttonRect.left - panelRect.left,
+      width: buttonRect.width,
+    });
+  }, [leftHoverIndex]);
+
   const variantSelectorBar = hasVariantSelector ? (
     <div className="flex justify-center pt-6 pb-1 -mb-24 z-10 relative">
       <div
         ref={variantBarRef}
-        className="flex h-10 items-center gap-1 rounded-full border-[1.4px] border-white/20 overflow-hidden p-1 min-w-[280px] max-w-[372px] w-max relative"
+        className="flex h-11 items-center gap-1 rounded-full border-[1.4px] border-white/20 overflow-hidden p-1 min-w-[300px] max-w-[420px] w-max relative"
       >
         <div
           className="absolute inset-0 rounded-full pointer-events-none"
@@ -140,7 +160,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
         />
         {pillStyle && (
           <div
-            className="absolute top-1 h-8 rounded-full pointer-events-none transition-[left,width] duration-200 ease-out"
+            className="absolute top-1 h-9 rounded-full pointer-events-none transition-[left,width] duration-200 ease-out"
             style={{
               left: pillStyle.left,
               width: pillStyle.width,
@@ -160,7 +180,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
               onClick={() => p.ready && router.push(p.path)}
               disabled={!p.ready}
               className={cn(
-                "relative flex flex-1 cursor-pointer items-center justify-center h-8 min-w-[52px] px-3 rounded-full text-[13px] leading-4 overflow-hidden transition-colors",
+                "relative flex flex-1 cursor-pointer items-center justify-center h-9 min-w-[60px] px-4 rounded-full text-[13px] leading-4 overflow-hidden transition-colors",
                 isSelected ? "text-white" : "text-white/60",
                 !p.ready && "cursor-not-allowed opacity-60"
               )}
@@ -217,6 +237,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
         />
         <div
           ref={leftPanelRef}
+          onMouseLeave={() => setLeftHoverIndex(null)}
           className={cn(
             "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-fit rounded-[16px] border-[1.4px] border-[rgba(80,80,80,0.22)] overflow-hidden p-1 flex flex-col gap-2",
             "min-[1400px]:opacity-100 min-[1400px]:pointer-events-auto",
@@ -245,6 +266,18 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
               }}
             />
           )}
+          {leftHoverPillStyle && (
+            <div
+              className="absolute rounded-lg pointer-events-none transition-[top,height,left,width] duration-200 ease-out"
+              style={{
+                top: leftHoverPillStyle.top,
+                height: leftHoverPillStyle.height,
+                left: leftHoverPillStyle.left,
+                width: leftHoverPillStyle.width,
+                background: "rgba(255, 255, 255, 0.1)",
+              }}
+            />
+          )}
           {projects.map((project, i) => {
             const isSelected = project.id === currentProjectId;
             const first = project.prototypes.find((p) => p.ready) ?? project.prototypes[0];
@@ -256,6 +289,8 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
                 }}
                 type="button"
                 onClick={() => first && router.push(first.path)}
+                onMouseEnter={() => setLeftHoverIndex(i)}
+                onMouseLeave={() => setLeftHoverIndex(null)}
                 className={cn(
                   "relative z-10 flex w-[150px] cursor-pointer items-center justify-center rounded-lg py-2.5 pr-7 pl-4 text-left text-[19px] leading-6 overflow-hidden transition-colors",
                   isSelected ? "text-[rgba(255,255,255,0.96)]" : "text-[#545454]"

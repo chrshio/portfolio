@@ -8,7 +8,8 @@ import { CourseCartSection } from "@/components/pos-fsr/course-cart-section";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
-import type { CartItem, MenuItem, SentBatch, SentCourseGroup } from "@/lib/pos-types";
+import { SettingsPage } from "@/components/pos/settings-page";
+import type { CartItem, MenuItem, SentBatch, SentCourseGroup, NavItem } from "@/lib/pos-types";
 import { FSR_COURSES } from "@/lib/pos-types";
 import {
   getDefaultModifiers,
@@ -31,6 +32,7 @@ function buildSeatOptions(count: number) {
 }
 
 export function POSScreenFSR() {
+  const [activeTab, setActiveTab] = useState<NavItem>("checkout");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [sentBatches, setSentBatches] = useState<SentBatch[]>([]);
   const [activeCourseId, setActiveCourseId] = useState("apps");
@@ -367,14 +369,17 @@ export function POSScreenFSR() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
-          {editingItem ? (
-            <ItemEditPanel
-              item={editingItem}
-              draftQuantity={draftQuantity}
-              draftModifiers={draftModifiers}
-              draftOptions={draftOptions}
+      {activeTab === "more" ? (
+        <SettingsPage variantLabel="FSR" />
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 flex flex-col min-w-0">
+            {editingItem ? (
+              <ItemEditPanel
+                item={editingItem}
+                draftQuantity={draftQuantity}
+                draftModifiers={draftModifiers}
+                draftOptions={draftOptions}
               onQuantityChange={setDraftQuantity}
               onModifiersChange={handleModifiersChange}
               onOptionsChange={handleOptionsChange}
@@ -433,10 +438,11 @@ export function POSScreenFSR() {
             seatingEnabled
             sentBatches={sentBatches}
           />
+          </div>
         </div>
-      </div>
+      )}
 
-      <BottomNavigation />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {addToastMessage && (
         <div

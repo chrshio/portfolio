@@ -7,8 +7,11 @@ import { MenuGridRetail } from "@/components/pos-retail/menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
+import { CartAccessoryCustomer } from "@/components/pos/cart-accessory-customer";
+import { AddCustomerModal } from "@/components/pos/add-customer-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
-import type { CartItem, MenuItem } from "@/lib/pos-types";
+import { SettingsPage } from "@/components/pos/settings-page";
+import type { CartItem, Customer, MenuItem, NavItem } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -30,6 +33,7 @@ export function POSScreenRetail({
 }: {
   onRegisterAddScannedItem?: (addItem: () => void) => void;
 } = {}) {
+  const [activeTab, setActiveTab] = useState<NavItem>("checkout");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -57,6 +61,9 @@ export function POSScreenRetail({
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
+
+  const [cartCustomer, setCartCustomer] = useState<Customer | null>(null);
+  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
 
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
@@ -348,64 +355,74 @@ export function POSScreenRetail({
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
-          {editingItem ? (
-            <ItemEditPanel
-              item={editingItem}
-              draftQuantity={draftQuantity}
-              draftModifiers={draftModifiers}
-              draftOptions={draftOptions}
-              onQuantityChange={setDraftQuantity}
-              onModifiersChange={handleModifiersChange}
-              onOptionsChange={handleOptionsChange}
-              onCompItem={handleCompItem}
-              onRemoveItem={handleRemoveItem}
-              scrollSignal={editScrollSignal}
-            />
-          ) : addingItem ? (
-            <ItemAddPanel
-              item={addingItem}
-              onCancel={handleAddCancel}
-              draftQuantity={addDraftQuantity}
-              draftModifiers={addDraftModifiers}
-              draftOptions={addDraftOptions}
-              onQuantityChange={setAddDraftQuantity}
-              onModifiersChange={setAddDraftModifiers}
-              onOptionsChange={setAddDraftOptions}
-              scrollSignal={addScrollSignal}
-            />
-          ) : (
-            <MenuGridRetail onAddItem={handleMenuItemSelect} />
-          )}
-        </div>
+      {activeTab === "more" ? (
+        <SettingsPage variantLabel="Retail" />
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 flex flex-col min-w-0">
+            {editingItem ? (
+              <ItemEditPanel
+                item={editingItem}
+                draftQuantity={draftQuantity}
+                draftModifiers={draftModifiers}
+                draftOptions={draftOptions}
+                onQuantityChange={setDraftQuantity}
+                onModifiersChange={handleModifiersChange}
+                onOptionsChange={handleOptionsChange}
+                onCompItem={handleCompItem}
+                onRemoveItem={handleRemoveItem}
+                scrollSignal={editScrollSignal}
+              />
+            ) : addingItem ? (
+              <ItemAddPanel
+                item={addingItem}
+                onCancel={handleAddCancel}
+                draftQuantity={addDraftQuantity}
+                draftModifiers={addDraftModifiers}
+                draftOptions={addDraftOptions}
+                onQuantityChange={setAddDraftQuantity}
+                onModifiersChange={setAddDraftModifiers}
+                onOptionsChange={setAddDraftOptions}
+                scrollSignal={addScrollSignal}
+              />
+            ) : (
+              <MenuGridRetail onAddItem={handleMenuItemSelect} />
+            )}
+          </div>
 
-        <div className="w-[320px] flex-shrink-0">
-          <CartSection
-            items={displayItems}
-            subtotal={subtotal}
-            tax={tax}
-            total={total}
-            onSave={handleSave}
-            onPay={handlePay}
-            editingItemId={editingItemId}
-            activeComboSlotId={null}
-            onItemClick={handleItemClick}
-            onRequirementClick={handleRequirementClick}
-            onEditCancel={handleEditCancel}
-            onEditDone={handleEditDone}
-            isAddMode={!!addingItem && !isEditingMode}
-            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-            onAddCancel={handleAddCancel}
-            onAdd={handleAddAttempt}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            getMenuItemById={getMenuItemByIdRetail}
-          />
+          <div className="w-[320px] flex-shrink-0">
+            <CartSection
+              items={displayItems}
+              subtotal={subtotal}
+              tax={tax}
+              total={total}
+              onSave={handleSave}
+              onPay={handlePay}
+              editingItemId={editingItemId}
+              activeComboSlotId={null}
+              onItemClick={handleItemClick}
+              onRequirementClick={handleRequirementClick}
+              onEditCancel={handleEditCancel}
+              onEditDone={handleEditDone}
+              isAddMode={!!addingItem && !isEditingMode}
+              addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+              onAddCancel={handleAddCancel}
+              onAdd={handleAddAttempt}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              getMenuItemById={getMenuItemByIdRetail}
+              accessories={
+                <CartAccessoryCustomer
+                  customer={cartCustomer}
+                  onAddCustomer={() => setAddCustomerModalOpen(true)}
+                />
+              }
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      <BottomNavigation />
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {addToastMessage && (
         <div
@@ -424,6 +441,12 @@ export function POSScreenRetail({
           </div>
         </div>
       )}
+
+      <AddCustomerModal
+        open={addCustomerModalOpen}
+        onOpenChange={setAddCustomerModalOpen}
+        onSelectCustomer={setCartCustomer}
+      />
     </div>
   );
 }
