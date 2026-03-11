@@ -10,6 +10,7 @@ import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
+import { ChargeScreen } from "@/components/pos/charge-screen";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import {
   getModifierGroups,
   isGroupRequirementUnmet,
 } from "@/lib/modifiers";
+import { cartHasIncompleteItems } from "@/lib/cart-validation";
 import {
   getComboDefinition,
   getDefaultComboSelections,
@@ -569,9 +571,21 @@ export function POSScreenQSR() {
     console.log("Saving order...", cartItems);
   }, [cartItems]);
 
+  const [showChargeScreen, setShowChargeScreen] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   const handlePay = useCallback(() => {
-    console.log("Processing payment...", { subtotal, tax, total });
-  }, [subtotal, tax, total]);
+    if (
+      cartHasIncompleteItems(displayItems, {
+        getComboDefinition,
+        getMenuItemById: getMenuItemByIdResolved,
+      })
+    ) {
+      setAddToastMessage("Make required selections to continue.");
+      return;
+    }
+    setShowChargeScreen(true);
+  }, [displayItems, getMenuItemByIdResolved]);
 
   const editingItem = cartItems.find((i) => i.id === editingItemId) ?? null;
 
@@ -579,35 +593,37 @@ export function POSScreenQSR() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      {activeTab === "more" ? (
-        <SettingsPage variantLabel="QSR" />
-      ) : (
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-1 flex flex-col min-w-0">
-            {editingItem ? (
-              <ItemEditPanel
-                item={editingItem}
-                draftQuantity={draftQuantity}
-                draftModifiers={draftModifiers}
-                draftOptions={draftOptions}
-                onQuantityChange={setDraftQuantity}
-                onModifiersChange={handleModifiersChange}
-                onOptionsChange={handleOptionsChange}
-                onCompItem={handleCompItem}
-                onRemoveItem={handleRemoveItem}
-                scrollSignal={editScrollSignal}
-                comboDefinition={editingItem.menuItemId ? getComboDefinition(editingItem.menuItemId) ?? undefined : undefined}
-                draftComboSelections={editDraftComboSelections}
-                onComboSelectionsChange={(slotId, selection) => {
-                  setEditDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
-                }}
-                getCategoryItems={getCategoryItems}
-                getMenuItemById={getMenuItemByIdResolved}
-                editingComboSlotId={editingComboSlotId}
-                onBackFromSlotModify={() => setEditingComboSlotId(null)}
-                onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
-              />
-            ) : addingItem ? (
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        {activeTab === "more" ? (
+          <SettingsPage variantLabel="QSR" onLoadingChange={setSettingsLoading} />
+        ) : (
+          <>
+            <div className="flex flex-1 min-h-0">
+            <div className="flex-1 flex flex-col min-w-0">
+              {editingItem ? (
+                <ItemEditPanel
+                  item={editingItem}
+                  draftQuantity={draftQuantity}
+                  draftModifiers={draftModifiers}
+                  draftOptions={draftOptions}
+                  onQuantityChange={setDraftQuantity}
+                  onModifiersChange={handleModifiersChange}
+                  onOptionsChange={handleOptionsChange}
+                  onCompItem={handleCompItem}
+                  onRemoveItem={handleRemoveItem}
+                  scrollSignal={editScrollSignal}
+                  comboDefinition={editingItem.menuItemId ? getComboDefinition(editingItem.menuItemId) ?? undefined : undefined}
+                  draftComboSelections={editDraftComboSelections}
+                  onComboSelectionsChange={(slotId, selection) => {
+                    setEditDraftComboSelections((prev) => ({ ...prev, [slotId]: selection }));
+                  }}
+                  getCategoryItems={getCategoryItems}
+                  getMenuItemById={getMenuItemByIdResolved}
+                  editingComboSlotId={editingComboSlotId}
+                  onBackFromSlotModify={() => setEditingComboSlotId(null)}
+                  onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
+                />
+              ) : addingItem ? (
             <ItemAddPanel
               item={addingItem}
               onCancel={handleAddCancel}
@@ -640,39 +656,49 @@ export function POSScreenQSR() {
               onOpenMenuSwitcher={() => setMenuSheetOpen(true)}
             />
           )}
-        </div>
+            </div>
 
-        <div className="w-[320px] flex-shrink-0">
-          <CartSection
-            items={displayItems}
-            subtotal={subtotal}
-            tax={tax}
-            total={total}
-            onSave={handleSave}
-            onPay={handlePay}
-            editingItemId={editingItemId}
-            activeComboSlotId={editingComboSlotId}
-            onItemClick={handleItemClick}
-            onRequirementClick={handleRequirementClick}
-            onEditCancel={handleEditCancel}
-            onEditDone={handleEditDone}
-            isAddMode={!!addingItem && !isEditingMode}
-            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-            onAddCancel={handleAddCancel}
-            onAdd={handleAddAttempt}
-            isAddSlotDetailMode={!!addingItem && !isEditingMode && !!editingComboSlotId}
-            onAddSlotCancel={handleAddSlotCancel}
-            onAddSlotDone={handleAddSlotDone}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            getMenuItemById={getMenuItemByIdResolved}
-            getComboDefinition={getComboDefinition}
-          />
+            <div className="w-[320px] flex-shrink-0">
+              <CartSection
+                items={displayItems}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+                onSave={handleSave}
+                onPay={handlePay}
+                editingItemId={editingItemId}
+                activeComboSlotId={editingComboSlotId}
+                onItemClick={handleItemClick}
+                onRequirementClick={handleRequirementClick}
+                onEditCancel={handleEditCancel}
+                onEditDone={handleEditDone}
+                isAddMode={!!addingItem && !isEditingMode}
+                addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+                onAddCancel={handleAddCancel}
+                onAdd={handleAddAttempt}
+                isAddSlotDetailMode={!!addingItem && !isEditingMode && !!editingComboSlotId}
+                onAddSlotCancel={handleAddSlotCancel}
+                onAddSlotDone={handleAddSlotDone}
+                onRemoveItem={handleRemoveCartItem}
+                onClearCart={handleClearCart}
+                getMenuItemById={getMenuItemByIdResolved}
+                getComboDefinition={getComboDefinition}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+          {showChargeScreen && (
+            <div className="absolute inset-0 z-10 flex flex-col justify-end">
+              <ChargeScreen total={total} onClose={() => setShowChargeScreen(false)} />
+            </div>
+          )}
+        </>
+        )}
+      </div>
+
+      {!showChargeScreen && !settingsLoading && (
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
 
       <MenuSwitcherSheet
         open={menuSheetOpen}

@@ -13,7 +13,7 @@ function variantShortLabel(item: PrototypeItem): string {
     qsr: "QSR",
     fsr: "FSR",
     retail: "Retail",
-    voice: "Voice",
+    voice: "*Vision*",
     main: "Main",
   };
   return map[item.id] ?? item.name;

@@ -2,17 +2,19 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AlertCircle, X } from "lucide-react";
-import { StatusBar } from "@/components/pos/status-bar";
+import { StatusBarVision } from "./status-bar-vision";
+import { BottomNavigationVision } from "./bottom-navigation-vision";
 import { MenuGrid } from "@/components/pos/menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
-import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
+import { ChargeScreen } from "@/components/pos/charge-screen";
 import { VoiceOverlay, type VoiceMessage } from "./voice-overlay";
 import { useVoiceRecognition } from "@/hooks/use-voice-recognition";
 import { useVoiceOrder } from "@/hooks/use-voice-order";
 import type { CartItem, MenuItem, NavItem } from "@/lib/pos-types";
+import { cartHasIncompleteItems } from "@/lib/cart-validation";
 import {
   featuredItems,
   teaItems,
@@ -85,11 +87,14 @@ export function POSScreenVoice() {
   const cartItemsRef = useRef(cartItems);
   cartItemsRef.current = cartItems;
 
+  const voiceItemCounter = useRef(0);
+
   const handleAddItemByVoice = useCallback(
     (itemId: string, modifiers?: string[]) => {
       const menuItem = getMenuItemById(itemId);
       if (!menuItem) return;
-      const uniqueId = `${menuItem.id}-${Date.now()}`;
+      voiceItemCounter.current += 1;
+      const uniqueId = `${menuItem.id}-${Date.now()}-${voiceItemCounter.current}`;
       setCartItems((prev) => [
         ...prev,
         {
@@ -110,8 +115,17 @@ export function POSScreenVoice() {
     []
   );
 
+  const handleSetModifierByVoice = useCallback((cartItemId: string, modifiers: string[]) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === cartItemId ? { ...item, modifiers } : item
+      )
+    );
+  }, []);
+
   const voiceOrder = useVoiceOrder({
     onAddItem: handleAddItemByVoice,
+    onSetModifier: handleSetModifierByVoice,
     getCartSnapshot: () =>
       cartItemsRef.current.map((i) => ({
         id: i.id,
@@ -133,21 +147,21 @@ export function POSScreenVoice() {
   });
 
   const handleVoiceToggle = useCallback(() => {
-    setVoiceMode((prev) => {
-      if (!prev) {
-        setEditingItemId(null);
-        setAddingItem(null);
-        setAddToastMessage(null);
-        setAddScrollSignal(null);
-        setEditScrollSignal(null);
-        voiceOrder.reset();
-        voice.start();
-      } else {
-        voice.stop();
-      }
-      return !prev;
-    });
-  }, [voice, voiceOrder]);
+    if (!voiceMode) {
+      setEditingItemId(null);
+      setAddingItem(null);
+      setAddToastMessage(null);
+      setAddScrollSignal(null);
+      setEditScrollSignal(null);
+      voiceOrder.reset();
+      // Must call start() directly in the click handler so Chrome's SpeechRecognition runs in a user gesture
+      voice.start();
+      setVoiceMode(true);
+    } else {
+      voice.stop();
+      setVoiceMode(false);
+    }
+  }, [voiceMode, voice, voiceOrder]);
 
   // Merge interim transcript bubble into the voiceOrder messages for display
   const voiceDisplayMessages: VoiceMessage[] = (() => {
@@ -407,92 +421,111 @@ export function POSScreenVoice() {
     console.log("Saving order...", cartItems);
   }, [cartItems]);
 
+  const [showChargeScreen, setShowChargeScreen] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   const handlePay = useCallback(() => {
-    console.log("Processing payment...", { subtotal, tax, total });
-  }, [subtotal, tax, total]);
+    if (cartHasIncompleteItems(displayItems)) {
+      setAddToastMessage("Make required selections to continue.");
+      return;
+    }
+    setShowChargeScreen(true);
+  }, [displayItems]);
 
   const editingItem = cartItems.find((i) => i.id === editingItemId) ?? null;
 
   return (
     <div className="relative flex flex-col h-full w-full bg-black">
-      <StatusBar />
+      <StatusBarVision />
 
-      {activeTab === "more" ? (
-        <SettingsPage variantLabel="Voice" />
-      ) : (
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-1 flex flex-col min-w-0 relative">
-            {editingItem && !voiceMode ? (
-              <ItemEditPanel
-                item={editingItem}
-                draftQuantity={draftQuantity}
-                draftModifiers={draftModifiers}
-                draftOptions={draftOptions}
-                onQuantityChange={setDraftQuantity}
-                onModifiersChange={handleModifiersChange}
-                onOptionsChange={handleOptionsChange}
-                onCompItem={handleCompItem}
-                onRemoveItem={handleRemoveItem}
-                scrollSignal={editScrollSignal}
-              />
-            ) : addingItem && !voiceMode ? (
-              <ItemAddPanel
-                item={addingItem}
-                onCancel={handleAddCancel}
-                draftQuantity={addDraftQuantity}
-                draftModifiers={addDraftModifiers}
-                draftOptions={addDraftOptions}
-                onQuantityChange={setAddDraftQuantity}
-                onModifiersChange={setAddDraftModifiers}
-                onOptionsChange={setAddDraftOptions}
-                scrollSignal={addScrollSignal}
-              />
-            ) : (
-              <MenuGrid onAddItem={handleMenuItemSelect} />
-            )}
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        {activeTab === "more" ? (
+          <SettingsPage variantLabel="*Vision*" onLoadingChange={setSettingsLoading} />
+        ) : (
+          <>
+            <div className="flex flex-1 min-h-0 rounded-xl overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 relative">
+              {editingItem && !voiceMode ? (
+                <ItemEditPanel
+                  item={editingItem}
+                  draftQuantity={draftQuantity}
+                  draftModifiers={draftModifiers}
+                  draftOptions={draftOptions}
+                  onQuantityChange={setDraftQuantity}
+                  onModifiersChange={handleModifiersChange}
+                  onOptionsChange={handleOptionsChange}
+                  onCompItem={handleCompItem}
+                  onRemoveItem={handleRemoveItem}
+                  scrollSignal={editScrollSignal}
+                />
+              ) : addingItem && !voiceMode ? (
+                <ItemAddPanel
+                  item={addingItem}
+                  onCancel={handleAddCancel}
+                  draftQuantity={addDraftQuantity}
+                  draftModifiers={addDraftModifiers}
+                  draftOptions={addDraftOptions}
+                  onQuantityChange={setAddDraftQuantity}
+                  onModifiersChange={setAddDraftModifiers}
+                  onOptionsChange={setAddDraftOptions}
+                  scrollSignal={addScrollSignal}
+                />
+              ) : (
+                <MenuGrid onAddItem={handleMenuItemSelect} />
+              )}
 
-            {voiceMode && (
-              <VoiceOverlay
-                messages={voiceDisplayMessages.length > 0 ? voiceDisplayMessages : undefined}
-                isListening={voice.isListening}
-                isProcessing={voiceOrder.isProcessing}
-                error={voice.error}
-                onClose={handleVoiceToggle}
-                onSuggestionSelect={voiceOrder.handleSuggestionSelect}
-                analyserNode={voice.analyserNode}
-              />
-            )}
+              {voiceMode && (
+                <VoiceOverlay
+                  messages={voiceDisplayMessages.length > 0 ? voiceDisplayMessages : undefined}
+                  isListening={voice.isListening}
+                  isProcessing={voiceOrder.isProcessing}
+                  error={voice.error}
+                  onClose={handleVoiceToggle}
+                  onSuggestionSelect={voiceOrder.handleSuggestionSelect}
+                  analyserNode={voice.analyserNode}
+                />
+              )}
 
+            </div>
+
+            <div className="w-[320px] flex-shrink-0">
+              <CartSection
+                items={displayItems}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+                onSave={handleSave}
+                onPay={handlePay}
+                editingItemId={editingItemId}
+                activeComboSlotId={null}
+                onItemClick={handleItemClick}
+                onRequirementClick={handleRequirementClick}
+                onEditCancel={handleEditCancel}
+                onEditDone={handleEditDone}
+                isAddMode={!!addingItem && !isEditingMode}
+                addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+                onAddCancel={handleAddCancel}
+                onAdd={handleAddAttempt}
+                onRemoveItem={handleRemoveCartItem}
+                onClearCart={handleClearCart}
+                voiceMode={voiceMode}
+                onVoiceToggle={handleVoiceToggle}
+              />
+            </div>
           </div>
 
-          <div className="w-[320px] flex-shrink-0">
-            <CartSection
-              items={displayItems}
-              subtotal={subtotal}
-              tax={tax}
-              total={total}
-              onSave={handleSave}
-              onPay={handlePay}
-              editingItemId={editingItemId}
-              activeComboSlotId={null}
-              onItemClick={handleItemClick}
-              onRequirementClick={handleRequirementClick}
-              onEditCancel={handleEditCancel}
-              onEditDone={handleEditDone}
-              isAddMode={!!addingItem && !isEditingMode}
-              addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-              onAddCancel={handleAddCancel}
-              onAdd={handleAddAttempt}
-              onRemoveItem={handleRemoveCartItem}
-              onClearCart={handleClearCart}
-              voiceMode={voiceMode}
-              onVoiceToggle={handleVoiceToggle}
-            />
-          </div>
-        </div>
+          {showChargeScreen && (
+            <div className="absolute inset-0 z-10 flex flex-col justify-end">
+              <ChargeScreen total={total} onClose={() => setShowChargeScreen(false)} />
+            </div>
+          )}
+          </>
+        )}
+      </div>
+
+      {!showChargeScreen && !settingsLoading && (
+        <BottomNavigationVision activeTab={activeTab} onTabChange={setActiveTab} />
       )}
-
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {addToastMessage && (
         <div

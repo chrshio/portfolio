@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { StatusBar } from "@/components/pos/status-bar";
 
 interface SettingsRowProps {
   label: string;
@@ -110,14 +109,22 @@ const LOADING_DURATION_MS = 1500;
 
 interface SettingsPageProps {
   variantLabel?: string;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
-export function SettingsPage({ variantLabel = "Standard" }: SettingsPageProps) {
+export function SettingsPage({ variantLabel = "Standard", onLoadingChange }: SettingsPageProps) {
   const router = useRouter();
   const [activeSidebarItem, setActiveSidebarItem] = useState("Checkout");
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState(variantLabel);
   const [loadingTarget, setLoadingTarget] = useState<ModeOption | null>(null);
+
+  useEffect(() => {
+    onLoadingChange?.(!!loadingTarget);
+    return () => {
+      onLoadingChange?.(false);
+    };
+  }, [loadingTarget, onLoadingChange]);
 
   const currentMode = modeOptions.find(
     (m) => m.label.toLowerCase() === selectedMode.toLowerCase()
@@ -162,9 +169,7 @@ export function SettingsPage({ variantLabel = "Standard" }: SettingsPageProps) {
 
   if (loadingTarget) {
     return (
-      <div className="absolute inset-0 z-50 flex flex-col bg-white">
-        <StatusBar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white">
           <SquareLogo />
           <span
             className="tabular-nums text-[24px] font-normal leading-[100%] text-[#101010]"
@@ -172,7 +177,6 @@ export function SettingsPage({ variantLabel = "Standard" }: SettingsPageProps) {
           >
             {loadingProgress}%
           </span>
-        </div>
       </div>
     );
   }

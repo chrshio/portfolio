@@ -9,14 +9,16 @@ import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
+import { ChargeScreen } from "@/components/pos/charge-screen";
 import type { CartItem, MenuItem, SentBatch, SentCourseGroup, NavItem, MenuId } from "@/lib/pos-types";
 import { FSR_COURSES } from "@/lib/pos-types";
 import {
   getDefaultModifiers,
   getModifierPriceDelta,
 } from "@/lib/modifiers";
+import { cartHasIncompleteItems } from "@/lib/cart-validation";
 import { getMenuItemByIdFSR, rootTilesFSR } from "@/lib/menu-library-fsr";
-import { getMenuItemById, rootTilesQSR } from "@/lib/menu-library-qsr";
+import { getMenuItemById, getComboDefinition, rootTilesQSR } from "@/lib/menu-library-qsr";
 import { MenuSwitcherSheet } from "@/components/pos/menu-switcher-sheet";
 
 const TAX_RATE = 0.05;
@@ -367,9 +369,22 @@ export function POSScreenFSR() {
     console.log("Printing...", cartItems);
   }, [cartItems]);
 
+  const [showChargeScreen, setShowChargeScreen] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   const handlePay = useCallback(() => {
-    console.log("Processing payment...", { subtotal, tax, total });
-  }, [subtotal, tax, total]);
+    if (
+      cartHasIncompleteItems(displayItems, {
+        getComboDefinition,
+        getMenuItemById: getMenuItemByIdResolved,
+        seatingEnabled: true,
+      })
+    ) {
+      setAddToastMessage("Make required selections to continue.");
+      return;
+    }
+    setShowChargeScreen(true);
+  }, [displayItems, getMenuItemByIdResolved]);
 
   const editingItem = cartItems.find((i) => i.id === editingItemId) ?? null;
 
@@ -377,85 +392,97 @@ export function POSScreenFSR() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      {activeTab === "more" ? (
-        <SettingsPage variantLabel="FSR" />
-      ) : (
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-1 flex flex-col min-w-0">
-            {editingItem ? (
-              <ItemEditPanel
-                item={editingItem}
-                draftQuantity={draftQuantity}
-                draftModifiers={draftModifiers}
-                draftOptions={draftOptions}
-              onQuantityChange={setDraftQuantity}
-              onModifiersChange={handleModifiersChange}
-              onOptionsChange={handleOptionsChange}
-              onCompItem={handleCompItem}
-              onRemoveItem={handleRemoveItem}
-              scrollSignal={editScrollSignal}
-              seats={seatOptions}
-              draftSeatId={editDraftSeatId}
-              onSeatChange={setEditDraftSeatId}
-              onAddSeat={handleAddSeat}
-            />
-          ) : addingItem ? (
-            <ItemAddPanel
-              item={addingItem}
-              onCancel={handleAddCancel}
-              draftQuantity={addDraftQuantity}
-              draftModifiers={addDraftModifiers}
-              draftOptions={addDraftOptions}
-              onQuantityChange={setAddDraftQuantity}
-              onModifiersChange={setAddDraftModifiers}
-              onOptionsChange={setAddDraftOptions}
-              scrollSignal={addScrollSignal}
-              seats={seatOptions}
-              draftSeatId={addDraftSeatId}
-              onSeatChange={setAddDraftSeatId}
-              onAddSeat={handleAddSeat}
-            />
-          ) : (
-            <MenuGridFSR
-              onAddItem={handleMenuItemSelect}
-              rootTiles={rootTilesForGrid}
-              menuLabel={menuLabel}
-              onOpenMenuSwitcher={() => setMenuSheetOpen(true)}
-            />
-          )}
-        </div>
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        {activeTab === "more" ? (
+          <SettingsPage variantLabel="FSR" onLoadingChange={setSettingsLoading} />
+        ) : (
+          <>
+            <div className="flex flex-1 min-h-0">
+            <div className="flex-1 flex flex-col min-w-0">
+              {editingItem ? (
+                <ItemEditPanel
+                  item={editingItem}
+                  draftQuantity={draftQuantity}
+                  draftModifiers={draftModifiers}
+                  draftOptions={draftOptions}
+                  onQuantityChange={setDraftQuantity}
+                  onModifiersChange={handleModifiersChange}
+                  onOptionsChange={handleOptionsChange}
+                  onCompItem={handleCompItem}
+                  onRemoveItem={handleRemoveItem}
+                  scrollSignal={editScrollSignal}
+                  seats={seatOptions}
+                  draftSeatId={editDraftSeatId}
+                  onSeatChange={setEditDraftSeatId}
+                  onAddSeat={handleAddSeat}
+                />
+              ) : addingItem ? (
+                <ItemAddPanel
+                  item={addingItem}
+                  onCancel={handleAddCancel}
+                  draftQuantity={addDraftQuantity}
+                  draftModifiers={addDraftModifiers}
+                  draftOptions={addDraftOptions}
+                  onQuantityChange={setAddDraftQuantity}
+                  onModifiersChange={setAddDraftModifiers}
+                  onOptionsChange={setAddDraftOptions}
+                  scrollSignal={addScrollSignal}
+                  seats={seatOptions}
+                  draftSeatId={addDraftSeatId}
+                  onSeatChange={setAddDraftSeatId}
+                  onAddSeat={handleAddSeat}
+                />
+              ) : (
+                <MenuGridFSR
+                  onAddItem={handleMenuItemSelect}
+                  rootTiles={rootTilesForGrid}
+                  menuLabel={menuLabel}
+                  onOpenMenuSwitcher={() => setMenuSheetOpen(true)}
+                />
+              )}
+            </div>
 
-        <div className="w-[320px] flex-shrink-0">
-          <CourseCartSection
-            items={displayItems}
-            activeCourseId={activeCourseId}
-            onActiveCourseChange={handleActiveCourseChange}
-            courseHolds={courseHolds}
-            onCourseHoldToggle={handleCourseHoldToggle}
-            editingItemId={editingItemId}
-            onItemClick={handleItemClick}
-            onRequirementClick={handleRequirementClick}
-            onEditCancel={handleEditCancel}
-            onEditDone={handleEditDone}
-            isAddMode={!!addingItem && !isEditingMode}
-            addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-            onAddCancel={handleAddCancel}
-            onAdd={handleAddConfirm}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onSend={handleSend}
-            onPrint={handlePrint}
-            onPay={handlePay}
-            getMenuItemById={getMenuItemByIdResolved}
-            coverCount={coverCount}
-            seatingEnabled
-            sentBatches={sentBatches}
-          />
+            <div className="w-[320px] flex-shrink-0">
+              <CourseCartSection
+                items={displayItems}
+                activeCourseId={activeCourseId}
+                onActiveCourseChange={handleActiveCourseChange}
+                courseHolds={courseHolds}
+                onCourseHoldToggle={handleCourseHoldToggle}
+                editingItemId={editingItemId}
+                onItemClick={handleItemClick}
+                onRequirementClick={handleRequirementClick}
+                onEditCancel={handleEditCancel}
+                onEditDone={handleEditDone}
+                isAddMode={!!addingItem && !isEditingMode}
+                addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+                onAddCancel={handleAddCancel}
+                onAdd={handleAddConfirm}
+                onRemoveItem={handleRemoveCartItem}
+                onClearCart={handleClearCart}
+                onSend={handleSend}
+                onPrint={handlePrint}
+                onPay={handlePay}
+                getMenuItemById={getMenuItemByIdResolved}
+                coverCount={coverCount}
+                seatingEnabled
+                sentBatches={sentBatches}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+          {showChargeScreen && (
+            <div className="absolute inset-0 z-10 flex flex-col justify-end">
+              <ChargeScreen total={total} onClose={() => setShowChargeScreen(false)} />
+            </div>
+          )}
+        </>
+        )}
+      </div>
+
+      {!showChargeScreen && !settingsLoading && (
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
 
       <MenuSwitcherSheet
         open={menuSheetOpen}

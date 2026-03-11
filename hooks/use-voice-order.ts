@@ -30,6 +30,8 @@ export interface VoiceOrderResponse {
 
 export interface VoiceOrderCallbacks {
   onAddItem: (itemId: string, modifiers?: string[]) => void;
+  /** Update modifiers on an existing cart item (e.g. when customer answers a follow-up). */
+  onSetModifier?: (cartItemId: string, modifiers: string[]) => void;
   getCartSnapshot: () => Array<{ id: string; name: string; modifiers?: string[] }>;
 }
 
@@ -83,6 +85,8 @@ export function useVoiceOrder(callbacks: VoiceOrderCallbacks): UseVoiceOrderRetu
     for (const action of actions) {
       if (action.type === "add_item") {
         callbacksRef.current.onAddItem(action.itemId, action.modifiers);
+      } else if (action.type === "set_modifier" && callbacksRef.current.onSetModifier && action.modifiers) {
+        callbacksRef.current.onSetModifier(action.itemId, action.modifiers);
       }
     }
   }, []);
@@ -104,6 +108,10 @@ export function useVoiceOrder(callbacks: VoiceOrderCallbacks): UseVoiceOrderRetu
 
       conversationHistory.current.push({ role: "user", content: transcript });
       setIsProcessing(true);
+
+      // Small delay so React flushes pending state (e.g. cart items from prior applyActions)
+      // before we snapshot the cart for the API call.
+      await new Promise((r) => setTimeout(r, 50));
 
       const response = await callApi(transcript);
       setIsProcessing(false);

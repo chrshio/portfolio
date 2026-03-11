@@ -30,38 +30,6 @@ export interface VoiceMessage {
   isInterim?: boolean;
 }
 
-// ---- Demo data matching the screenshot ----
-
-const DEMO_MESSAGES: VoiceMessage[] = [
-  {
-    id: "demo-1",
-    role: "customer",
-    text: "Hey there. I\u2019ll have a latte \uD83E\uDDCB but make it almond milk today.",
-    entities: [
-      { text: "latte", type: "item" },
-      { text: "almond milk", type: "modifier" },
-    ],
-  },
-  {
-    id: "demo-2",
-    role: "assistant",
-    text: "Any extra shots with that?",
-    suggestion: {
-      options: [
-        { label: "espresso shot" },
-        { label: "vanilla shot", selected: true },
-        { label: "caramel shot" },
-      ],
-    },
-  },
-  {
-    id: "demo-3",
-    role: "customer",
-    text: "Let\u2019s try a vanilla shot thanks.",
-    entities: [{ text: "vanilla shot", type: "modifier" }],
-  },
-];
-
 // ---- Entity-highlighted text renderer ----
 
 function renderTextWithEntities(
@@ -129,7 +97,7 @@ export function VoiceOverlay({
   onSuggestionSelect,
   analyserNode,
 }: VoiceOverlayProps) {
-  const displayMessages = messages ?? DEMO_MESSAGES;
+  const displayMessages = messages ?? [];
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -172,7 +140,7 @@ export function VoiceOverlay({
             <div
               className={cn(
                 "flex",
-                msg.role === "customer" ? "justify-end" : "justify-start"
+                msg.role === "customer" ? "justify-start" : "justify-end"
               )}
             >
               <div
@@ -187,19 +155,19 @@ export function VoiceOverlay({
               </div>
             </div>
 
-            {/* Suggestion card */}
+            {/* Suggestion pills — horizontally below the question */}
             {msg.suggestion && (
-              <div className="flex justify-center">
-                <div className="bg-white rounded-xl shadow-lg border border-[#e8e8e8] overflow-hidden min-w-[180px]">
-                  {msg.suggestion.options.map((opt, i) => (
+              <div className="flex justify-end">
+                <div className="flex flex-wrap gap-2">
+                  {msg.suggestion.options.map((opt) => (
                     <button
                       key={opt.label}
                       type="button"
                       onClick={() => onSuggestionSelect?.(msg.id, opt.label)}
                       className={cn(
-                        "w-full px-5 py-3 text-left text-[16px] leading-[22px] text-[#1a1a1a]",
-                        i > 0 && "border-t border-[#f0f0f0]",
-                        opt.selected && "font-semibold"
+                        "rounded-full px-4 py-2.5 text-[15px] font-medium transition-colors",
+                        "bg-[#101010] text-white",
+                        opt.selected && "ring-2 ring-white ring-offset-2 ring-offset-transparent"
                       )}
                     >
                       {opt.label}
@@ -213,7 +181,7 @@ export function VoiceOverlay({
 
         {/* Thinking indicator */}
         {isProcessing && (
-          <div className="flex justify-start">
+          <div className="flex justify-end">
             <div className="bg-white rounded-[20px] px-6 py-4 shadow-sm flex gap-1.5 items-center">
               <span className="w-2 h-2 rounded-full bg-[#999] animate-[pulse_1.4s_ease-in-out_infinite]" />
               <span className="w-2 h-2 rounded-full bg-[#999] animate-[pulse_1.4s_ease-in-out_0.2s_infinite]" />

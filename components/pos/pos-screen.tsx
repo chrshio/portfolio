@@ -9,12 +9,14 @@ import { ItemAddPanel } from "./item-add-panel";
 import { CartSection } from "./cart-section";
 import { BottomNavigation } from "./bottom-navigation";
 import { SettingsPage } from "./settings-page";
+import { ChargeScreen } from "./charge-screen";
 import type { CartItem, MenuItem, NavItem } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
   getModifierPriceDelta,
 } from "@/lib/modifiers";
+import { cartHasIncompleteItems } from "@/lib/cart-validation";
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
@@ -308,9 +310,16 @@ export function POSScreen() {
     console.log("Saving order...", cartItems);
   }, [cartItems]);
 
+  const [showChargeScreen, setShowChargeScreen] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   const handlePay = useCallback(() => {
-    console.log("Processing payment...", { subtotal, tax, total });
-  }, [subtotal, tax, total]);
+    if (cartHasIncompleteItems(displayItems)) {
+      setAddToastMessage("Make required selections to continue.");
+      return;
+    }
+    setShowChargeScreen(true);
+  }, [displayItems]);
 
   const editingItem = cartItems.find((i) => i.id === editingItemId) ?? null;
 
@@ -318,67 +327,79 @@ export function POSScreen() {
     <div className="relative flex flex-col h-full w-full bg-black">
       <StatusBar />
 
-      {activeTab === "more" ? (
-        <SettingsPage variantLabel="Standard" />
-      ) : (
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-1 flex flex-col min-w-0">
-            {editingItem ? (
-              <ItemEditPanel
-                item={editingItem}
-                draftQuantity={draftQuantity}
-                draftModifiers={draftModifiers}
-                draftOptions={draftOptions}
-                onQuantityChange={setDraftQuantity}
-                onModifiersChange={handleModifiersChange}
-                onOptionsChange={handleOptionsChange}
-                onCompItem={handleCompItem}
-                onRemoveItem={handleRemoveItem}
-                scrollSignal={editScrollSignal}
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        {activeTab === "more" ? (
+          <SettingsPage variantLabel="Standard" onLoadingChange={setSettingsLoading} />
+        ) : (
+          <>
+            <div className="flex flex-1 min-h-0">
+            <div className="flex-1 flex flex-col min-w-0">
+              {editingItem ? (
+                <ItemEditPanel
+                  item={editingItem}
+                  draftQuantity={draftQuantity}
+                  draftModifiers={draftModifiers}
+                  draftOptions={draftOptions}
+                  onQuantityChange={setDraftQuantity}
+                  onModifiersChange={handleModifiersChange}
+                  onOptionsChange={handleOptionsChange}
+                  onCompItem={handleCompItem}
+                  onRemoveItem={handleRemoveItem}
+                  scrollSignal={editScrollSignal}
+                />
+              ) : addingItem ? (
+                <ItemAddPanel
+                  item={addingItem}
+                  onCancel={handleAddCancel}
+                  draftQuantity={addDraftQuantity}
+                  draftModifiers={addDraftModifiers}
+                  draftOptions={addDraftOptions}
+                  onQuantityChange={setAddDraftQuantity}
+                  onModifiersChange={setAddDraftModifiers}
+                  onOptionsChange={setAddDraftOptions}
+                  scrollSignal={addScrollSignal}
+                />
+              ) : (
+                <MenuGrid onAddItem={handleMenuItemSelect} />
+              )}
+            </div>
+
+            <div className="w-[320px] flex-shrink-0">
+              <CartSection
+                items={displayItems}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+                onSave={handleSave}
+                onPay={handlePay}
+                editingItemId={editingItemId}
+                activeComboSlotId={null}
+                onItemClick={handleItemClick}
+                onRequirementClick={handleRequirementClick}
+                onEditCancel={handleEditCancel}
+                onEditDone={handleEditDone}
+                isAddMode={!!addingItem && !isEditingMode}
+                addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
+                onAddCancel={handleAddCancel}
+                onAdd={handleAddAttempt}
+                onRemoveItem={handleRemoveCartItem}
+                onClearCart={handleClearCart}
               />
-            ) : addingItem ? (
-              <ItemAddPanel
-                item={addingItem}
-                onCancel={handleAddCancel}
-                draftQuantity={addDraftQuantity}
-                draftModifiers={addDraftModifiers}
-                draftOptions={addDraftOptions}
-                onQuantityChange={setAddDraftQuantity}
-                onModifiersChange={setAddDraftModifiers}
-                onOptionsChange={setAddDraftOptions}
-                scrollSignal={addScrollSignal}
-              />
-            ) : (
-              <MenuGrid onAddItem={handleMenuItemSelect} />
-            )}
+            </div>
           </div>
 
-          <div className="w-[320px] flex-shrink-0">
-            <CartSection
-              items={displayItems}
-              subtotal={subtotal}
-              tax={tax}
-              total={total}
-              onSave={handleSave}
-              onPay={handlePay}
-              editingItemId={editingItemId}
-              activeComboSlotId={null}
-              onItemClick={handleItemClick}
-              onRequirementClick={handleRequirementClick}
-              onEditCancel={handleEditCancel}
-              onEditDone={handleEditDone}
-              isAddMode={!!addingItem && !isEditingMode}
-              addingItemId={addingItem && !isEditingMode ? ADD_DRAFT_ID : null}
-              onAddCancel={handleAddCancel}
-              onAdd={handleAddAttempt}
-              onRemoveItem={handleRemoveCartItem}
-              onClearCart={handleClearCart}
-            />
-          </div>
-        </div>
+          {showChargeScreen && (
+            <div className="absolute inset-0 z-10 flex flex-col justify-end">
+              <ChargeScreen total={total} onClose={() => setShowChargeScreen(false)} />
+            </div>
+          )}
+          </>
+        )}
+      </div>
+
+      {!showChargeScreen && !settingsLoading && (
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       )}
-
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Toast — centered above the bottom nav bar, slides up from below */}
       {addToastMessage && (

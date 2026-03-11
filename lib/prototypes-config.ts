@@ -20,7 +20,7 @@ export const projects: ProjectItem[] = [
       { id: "qsr", name: "QSR", path: "/prototypes/checkout-pos/qsr", ready: true },
       { id: "fsr", name: "FSR mode", path: "/prototypes/checkout-pos/fsr", ready: true },
       { id: "retail", name: "Retail mode", path: "/prototypes/checkout-pos/retail", ready: true },
-      { id: "voice", name: "Voice", path: "/prototypes/checkout-pos/voice", ready: true },
+      { id: "voice", name: "*Vision*", path: "/prototypes/checkout-pos/voice", ready: true },
     ],
   },
   {

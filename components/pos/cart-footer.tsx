@@ -102,11 +102,18 @@ export function CartFooter({
       <div className="flex items-center gap-3 px-0 py-4">
         <button
           onClick={onVoiceToggle}
-          className="flex-1 py-4 rounded-full bg-[#f0f0f0] text-[#101010] font-medium text-base transition-colors flex items-center justify-center gap-2"
+          className="flex-1 py-4 rounded-full bg-[#f0f0f0] text-[#101010] font-medium text-base transition-colors flex items-center justify-center"
         >
           <MicOff className="w-5 h-5" />
-          End voice
         </button>
+        {!cartEmpty && (
+          <button
+            onClick={onPay}
+            className="flex-1 py-4 rounded-full bg-[#101010] text-[#ffffff] font-medium text-base transition-colors"
+          >
+            Pay
+          </button>
+        )}
       </div>
     );
   }
@@ -116,10 +123,9 @@ export function CartFooter({
       <div className="flex items-center gap-3 px-0 py-4">
         <button
           onClick={onVoiceToggle}
-          className="flex-1 py-4 rounded-full bg-[#101010] text-[#ffffff] font-medium text-base transition-colors flex items-center justify-center gap-2"
+          className="flex-1 py-4 rounded-full bg-[#101010] text-[#ffffff] font-medium text-base transition-colors flex items-center justify-center"
         >
           <Mic className="w-5 h-5" />
-          Enable voice
         </button>
       </div>
     );

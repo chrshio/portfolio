@@ -79,14 +79,24 @@ export function useVoiceRecognition(
     recognition.interimResults = true;
     recognition.lang = lang;
 
+    recognition.onstart = () => {
+      setError(null);
+      setIsListening(true);
+    };
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        const text = result[0].transcript;
+      const results = event.results;
+      if (!results || results.length === 0) return;
+      for (let i = event.resultIndex; i < results.length; i++) {
+        const result = results[i];
+        const first = result?.[0];
+        if (!first) continue;
+        const text = first.transcript;
         if (result.isFinal) {
           setInterimTranscript("");
-          onFinalTranscriptRef.current?.(text.trim());
+          const trimmed = text?.trim?.();
+          if (trimmed) onFinalTranscriptRef.current?.(trimmed);
         } else {
           interim += text;
         }
@@ -167,10 +177,10 @@ export function useVoiceRecognition(
 
     try {
       recognition.start();
-      setIsListening(true);
       startAudioAnalyser();
-    } catch {
+    } catch (e) {
       setError("Failed to start speech recognition");
+      setIsListening(false);
     }
   }, [createRecognition, startAudioAnalyser]);
 
