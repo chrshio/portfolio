@@ -10,6 +10,7 @@ const VARIANT_SELECTOR_MIN_HEIGHT = 950;
 function variantShortLabel(item: PrototypeItem): string {
   const map: Record<string, string> = {
     cafe: "Standard",
+    "variant-a": "Variant A",
     qsr: "QSR",
     fsr: "FSR",
     retail: "Retail",

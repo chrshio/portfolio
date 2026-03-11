@@ -180,6 +180,8 @@ interface ItemEditPanelProps {
   onSeatChange?: (seatId: string) => void;
   /** When provided, shows "Add seat" tile that adds a new seat and selects it. */
   onAddSeat?: () => void;
+  /** When true, hide the header (title + stepper); used when parent renders a custom header (e.g. modal). */
+  hideHeader?: boolean;
 }
 
 export function ItemEditPanel({
@@ -205,6 +207,7 @@ export function ItemEditPanel({
   draftSeatId,
   onSeatChange,
   onAddSeat,
+  hideHeader,
 }: ItemEditPanelProps) {
   const isCombo = !!comboDefinition;
 
@@ -241,10 +244,14 @@ export function ItemEditPanel({
     const el = sectionRefs.current[tabId];
     const container = scrollContainerRef.current;
     if (container && el) {
-      const top = Math.max(0, el.offsetTop - 16);
+      // Use getBoundingClientRect so scrolling works when panel is inside a transformed container (e.g. modal)
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const top = Math.max(
+        0,
+        container.scrollTop + (elRect.top - containerRect.top) - 16
+      );
       container.scrollTo({ top, behavior: "smooth" });
-    } else if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
 
@@ -342,12 +349,9 @@ export function ItemEditPanel({
     if (wasRequiredAndUnmet && nowSatisfied) {
       const nextId = getNextUnmetRequiredGroupId(nextModifiers);
       if (nextId) {
+        // Defer until after React commit and layout so refs and positions are correct (e.g. in modal)
         requestAnimationFrame(() => {
-          const el = sectionRefs.current[nextId];
-          if (el) {
-            setActiveTabId(nextId);
-            el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+          requestAnimationFrame(() => scrollToSection(nextId));
         });
       }
     }
@@ -368,7 +372,7 @@ export function ItemEditPanel({
 
   return (
     <div className="flex flex-col h-full bg-white px-6">
-      {/* Header */}
+      {!hideHeader && (
       <div className="flex items-center gap-3 pt-4 pb-4 h-[88px]">
         {isSlotDetail && activeSlotItem ? (
           <h2 className="min-w-0 flex-1 text-[25px] font-semibold leading-tight truncate">
@@ -420,6 +424,7 @@ export function ItemEditPanel({
           </>
         )}
       </div>
+      )}
 
       {/* Tab bar */}
       <div className="border-b border-[#f0f0f0]">

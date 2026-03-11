@@ -21,6 +21,7 @@ export const projects: ProjectItem[] = [
       { id: "fsr", name: "FSR mode", path: "/prototypes/checkout-pos/fsr", ready: true },
       { id: "retail", name: "Retail mode", path: "/prototypes/checkout-pos/retail", ready: true },
       { id: "voice", name: "*Vision*", path: "/prototypes/checkout-pos/voice", ready: true },
+      { id: "variant-a", name: "Variant A", path: "/prototypes/checkout-pos/variant-a", ready: true },
     ],
   },
   {

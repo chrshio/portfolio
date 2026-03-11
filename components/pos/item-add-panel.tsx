@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Minus, Plus } from "lucide-react";
 import type { MenuItem } from "@/lib/pos-types";
 import type { ComboDefinition, ComboSlotSelection } from "@/lib/pos-types";
@@ -55,6 +55,8 @@ interface ItemAddPanelProps {
   onSeatChange?: (seatId: string) => void;
   /** When provided, shows "Add seat" tile that adds a new seat and selects it. */
   onAddSeat?: () => void;
+  /** When true, hide the header (title + stepper); used when parent renders a custom header (e.g. modal). */
+  hideHeader?: boolean;
 }
 
 function ModifierTile({
@@ -112,6 +114,7 @@ export function ItemAddPanel({
   draftSeatId,
   onSeatChange,
   onAddSeat,
+  hideHeader,
 }: ItemAddPanelProps) {
   const isCombo = !!comboDefinition;
   const activeSlot =
@@ -172,27 +175,35 @@ export function ItemAddPanel({
     if (wasRequiredAndUnmet && nowSatisfied) {
       const nextId = getNextUnmetRequiredGroupId(nextModifiers);
       if (nextId) {
+        // Defer until after React commit and layout so refs and positions are correct (e.g. in modal)
         requestAnimationFrame(() => {
-          const el = sectionRefs.current[nextId];
-          if (el) {
-            setActiveTabId(nextId);
-            el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+          requestAnimationFrame(() => scrollToSection(nextId));
         });
       }
     }
   };
 
+  const scrollToSection = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
+    const el = sectionRefs.current[tabId];
+    const container = scrollContainerRef.current;
+    if (container && el) {
+      // Use getBoundingClientRect so scrolling works when panel is inside a transformed container (e.g. modal)
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const top = Math.max(
+        0,
+        container.scrollTop + (elRect.top - containerRect.top) - 16
+      );
+      container.scrollTo({ top, behavior: "smooth" });
+    }
+  }, []);
+
   // Scroll to the target section whenever a new scroll signal arrives.
   useEffect(() => {
     if (!scrollSignal) return;
-    const el = sectionRefs.current[scrollSignal.groupId];
-    if (el) {
-      setActiveTabId(scrollSignal.groupId);
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollSignal?.nonce]);
+    scrollToSection(scrollSignal.groupId);
+  }, [scrollSignal?.nonce, scrollToSection, scrollSignal]);
 
   const hasSeatSection = !!(seats && seats.length > 0 && onSeatChange && !isSlotDetail);
   const seatTab = hasSeatSection
@@ -253,9 +264,7 @@ export function ItemAddPanel({
   }, []);
 
   const handleTabClick = (tabId: string) => {
-    setActiveTabId(tabId);
-    const el = sectionRefs.current[tabId];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(tabId);
   };
 
   const toggleLineItem = (
@@ -273,7 +282,7 @@ export function ItemAddPanel({
 
   return (
     <div className="flex flex-col h-full bg-white px-6">
-      {/* Header */}
+      {!hideHeader && (
       <div className="flex items-center gap-6 pt-4 pb-4 h-[88px]">
         {isSlotDetail && activeSlotItem ? (
           <h2 className="min-w-0 flex-1 text-[25px] font-semibold leading-tight truncate">
@@ -327,6 +336,7 @@ export function ItemAddPanel({
           </>
         )}
       </div>
+      )}
 
       {/* Tab bar (Meal / Note / Options for combo; modifier groups + Note + Options otherwise) */}
       <div className="border-b border-[#f0f0f0]">
