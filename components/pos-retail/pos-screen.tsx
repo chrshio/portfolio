@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AlertCircle, X } from "lucide-react";
+import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
 import { MenuGridRetail } from "@/components/pos-retail/menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
@@ -68,6 +68,7 @@ export function POSScreenRetail({
   });
 
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
+  const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
 
@@ -77,12 +78,13 @@ export function POSScreenRetail({
   const [orderFulfillment, setOrderFulfillment] = useState<string>("in-store");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
 
+  const activeToast = addToastMessage ?? updateToastMessage;
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
 
   useEffect(() => {
-    if (addToastMessage) {
+    if (activeToast) {
       toastRafRef.current = requestAnimationFrame(() => {
         toastRafRef.current = requestAnimationFrame(() => setToastVisible(true));
       });
@@ -92,13 +94,13 @@ export function POSScreenRetail({
     return () => {
       if (toastRafRef.current != null) cancelAnimationFrame(toastRafRef.current);
     };
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   useEffect(() => {
-    if (!addToastMessage) return;
-    const t = setTimeout(() => setAddToastMessage(null), 4000);
+    if (!activeToast) return;
+    const t = setTimeout(() => { setAddToastMessage(null); setUpdateToastMessage(null); }, 4000);
     return () => clearTimeout(t);
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   const draftCartItem: CartItem | null =
     addingItem && !isEditingMode
@@ -250,8 +252,35 @@ export function POSScreenRetail({
 
   const handleItemClick = useCallback(
     (id: string) => {
+      if (editingItemId && editingItemId !== id) {
+        const prevItem = cartItems.find((i) => i.id === editingItemId);
+        setCartItems((prev) => prev.map((ci) => ci.id === editingItemId ? { ...ci, quantity: draftQuantity, modifiers: draftModifiers, note: draftOptions.note || undefined, fulfillmentMethod: draftOptions.fulfillmentMethod, taxes: draftOptions.taxes, discounts: draftOptions.discounts, serviceCharges: draftOptions.serviceCharges } : ci));
+        if (prevItem) { setUpdateToastMessage(`${prevItem.name} updated.`); }
+      }
       const item = cartItems.find((i) => i.id === id);
       if (!item) return;
+
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+      }
+
       setAddingItem(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
@@ -267,7 +296,7 @@ export function POSScreenRetail({
         serviceCharges: item.serviceCharges ?? [],
       });
     },
-    [cartItems]
+    [cartItems, editingItemId, draftQuantity, draftModifiers, draftOptions, addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions]
   );
 
   const handleRequirementClick = useCallback(
@@ -278,6 +307,28 @@ export function POSScreenRetail({
       }
       const item = cartItems.find((i) => i.id === itemId);
       if (!item) return;
+
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+      }
+
       setAddingItem(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
@@ -295,7 +346,7 @@ export function POSScreenRetail({
       }
       setEditScrollSignal({ groupId, nonce: Date.now() });
     },
-    [addingItem, cartItems, editingItemId]
+    [addingItem, cartItems, editingItemId, addDraftQuantity, addDraftModifiers, addDraftOptions]
   );
 
   const handleEditCancel = useCallback(() => {
@@ -442,6 +493,8 @@ export function POSScreenRetail({
                   RETAIL_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? "In store"
                 }
                 onFulfillmentHeaderClick={() => setFulfillmentModalOpen(true)}
+                onFulfillmentClick={() => setFulfillmentModalOpen(true)}
+                isDefaultFulfillment={orderFulfillment === "in-store"}
               />
             </div>
           </div>
@@ -459,7 +512,7 @@ export function POSScreenRetail({
         <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       )}
 
-      {addToastMessage && (
+      {activeToast && (
         <div
           className="absolute left-1/2 z-50 w-[600px] max-w-[calc(100%-32px)] transition-transform duration-300 ease-out"
           style={{
@@ -467,10 +520,10 @@ export function POSScreenRetail({
             transform: `translateX(-50%) translateY(${toastVisible ? "0" : "200%"})`,
           }}
         >
-          <div className="flex items-center gap-3 bg-[#cc0023] px-4 py-4 rounded-lg shadow-xl">
-            <AlertCircle className="w-6 h-6 text-white shrink-0" />
-            <p className="flex-1 text-[16px] text-white leading-6">{addToastMessage}</p>
-            <button onClick={() => setAddToastMessage(null)} className="shrink-0">
+          <div className={`flex items-center gap-3 px-4 py-4 rounded-[16px] shadow-xl ${addToastMessage ? "bg-[#cc0023]" : "bg-[#232323]"}`}>
+            {addToastMessage ? <AlertCircle className="w-6 h-6 text-white shrink-0" /> : <CheckCircle className="w-6 h-6 text-[#00a63e] shrink-0" />}
+            <p className="flex-1 text-[16px] text-white leading-6">{activeToast}</p>
+            <button onClick={() => { setAddToastMessage(null); setUpdateToastMessage(null); }} className="shrink-0">
               <X className="w-6 h-6 text-white" />
             </button>
           </div>

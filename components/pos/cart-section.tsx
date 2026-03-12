@@ -39,10 +39,14 @@ interface CartSectionProps {
   onVoiceToggle?: () => void;
   /** Optional accessories (e.g. customer for retail) rendered below the cart header. */
   accessories?: React.ReactNode;
-  /** Order-level fulfillment label (e.g. "In store"); when set with onFulfillmentHeaderClick, shows fulfillment header above cart items (retail). */
+  /** Order-level fulfillment label (e.g. "In store"); when set with onFulfillmentHeaderClick, shows fulfillment header above cart items. */
   orderFulfillmentLabel?: string;
   /** Called when the fulfillment header is clicked to open fulfillment selection modal. */
   onFulfillmentHeaderClick?: () => void;
+  /** When true, the fulfillment header is in its "default" state (e.g. "For here" / "In store") — hides "Add details" and hides the empty-cart card. */
+  isDefaultFulfillment?: boolean;
+  /** Called when "Fulfillment" is clicked in the actions menu (e.g. open fulfillment method modal). */
+  onFulfillmentClick?: () => void;
 }
 
 export function CartSection({
@@ -75,13 +79,41 @@ export function CartSection({
   accessories,
   orderFulfillmentLabel,
   onFulfillmentHeaderClick,
+  onFulfillmentClick,
+  isDefaultFulfillment,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const isEditMode = editingItemId != null;
   const moreDisabled = isEditMode || !!isAddMode;
   const showFulfillmentHeader =
-    items.length > 0 && orderFulfillmentLabel != null && onFulfillmentHeaderClick != null;
+    orderFulfillmentLabel != null && onFulfillmentHeaderClick != null;
+
+  /** Fulfillment header row (Figma: "Pickup" left, "Add details" underlined right). */
+  const fulfillmentHeaderRow = showFulfillmentHeader ? (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onFulfillmentHeaderClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onFulfillmentHeaderClick?.();
+        }
+      }}
+      className={`flex w-full cursor-pointer items-center justify-between px-4 pt-3 min-h-[40px] ${items.length === 0 ? "pb-3" : "pb-2"}`}
+      aria-label={`Fulfillment: ${orderFulfillmentLabel}. Select to change.`}
+    >
+      <span className="text-[14px] font-medium text-[#666666]">
+        {orderFulfillmentLabel}
+      </span>
+      {!isDefaultFulfillment && (
+        <span className="text-[14px] font-medium text-[#101010] underline">
+          Add details
+        </span>
+      )}
+    </div>
+  ) : null;
 
   if (items.length === 0) {
     return (
@@ -92,6 +124,11 @@ export function CartSection({
             {accessories && (
               <div className="flex flex-col gap-4">
                 {accessories}
+              </div>
+            )}
+            {showFulfillmentHeader && !isDefaultFulfillment && (
+              <div className="rounded-xl border border-[#e5e5e5] bg-white">
+                {fulfillmentHeaderRow}
               </div>
             )}
           </div>
@@ -112,6 +149,7 @@ export function CartSection({
           open={actionsOpen}
           onOpenChange={setActionsOpen}
           onClearCart={onClearCart}
+          onFulfillmentClick={onFulfillmentClick}
         />
       </div>
     );
@@ -133,24 +171,8 @@ export function CartSection({
             </div>
           )}
           {showFulfillmentHeader ? (
-            <div className="rounded-2xl overflow-hidden border border-[#e5e5e5]">
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={onFulfillmentHeaderClick}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onFulfillmentHeaderClick?.();
-                  }
-                }}
-                className="flex w-full cursor-pointer items-center justify-between pl-[18px] pr-4 pt-3 pb-1"
-                aria-label={`Fulfillment: ${orderFulfillmentLabel}. Select to change.`}
-              >
-                <span className="text-[14px] font-medium text-[#666666]">
-                  {orderFulfillmentLabel}
-                </span>
-              </div>
+            <div className="rounded-xl overflow-hidden border border-[#e5e5e5]">
+              {fulfillmentHeaderRow}
               <CartItems
                 items={items}
                 editingItemId={editingItemId}
@@ -206,6 +228,7 @@ export function CartSection({
         open={actionsOpen}
         onOpenChange={setActionsOpen}
         onClearCart={onClearCart}
+        onFulfillmentClick={onFulfillmentClick}
       />
     </div>
   );

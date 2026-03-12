@@ -191,7 +191,11 @@ export function getModifierGroups(item: { name: string }): ModifierGroup[] {
   const isBeverage = BEVERAGE_KEYWORDS.some((kw) =>
     item.name.toLowerCase().includes(kw)
   );
-  return isBeverage ? BEVERAGE_MODIFIER_GROUPS : BAKERY_MODIFIER_GROUPS;
+  if (!isBeverage) return BAKERY_MODIFIER_GROUPS;
+  if (item.name.toLowerCase().startsWith("iced ")) {
+    return BEVERAGE_MODIFIER_GROUPS.filter((g) => g.id !== "temperature");
+  }
+  return BEVERAGE_MODIFIER_GROUPS;
 }
 
 export function isGroupRequirementUnmet(

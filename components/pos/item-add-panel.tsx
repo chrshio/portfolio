@@ -281,7 +281,7 @@ export function ItemAddPanel({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white px-6">
+    <div className="flex flex-col flex-1 min-h-0 bg-white px-6">
       {!hideHeader && (
       <div className="flex items-center gap-6 pt-4 pb-4 h-[88px]">
         {isSlotDetail && activeSlotItem ? (

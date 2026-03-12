@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AlertCircle, X } from "lucide-react";
+import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
 import { MenuGridFSR } from "@/components/pos-fsr/menu-grid";
 import { CourseCartSection } from "@/components/pos-fsr/course-cart-section";
@@ -79,9 +79,11 @@ export function POSScreenFSR() {
   const [editDraftSeatId, setEditDraftSeatId] = useState<string | null>(null);
 
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
+  const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
 
+  const activeToast = addToastMessage ?? updateToastMessage;
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
@@ -93,7 +95,7 @@ export function POSScreenFSR() {
   const menuLabel = activeMenuId === "dinner" ? "Dinner" : "Lunch";
 
   useEffect(() => {
-    if (addToastMessage) {
+    if (activeToast) {
       toastRafRef.current = requestAnimationFrame(() => {
         toastRafRef.current = requestAnimationFrame(() => setToastVisible(true));
       });
@@ -103,13 +105,13 @@ export function POSScreenFSR() {
     return () => {
       if (toastRafRef.current != null) cancelAnimationFrame(toastRafRef.current);
     };
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   useEffect(() => {
-    if (!addToastMessage) return;
-    const t = setTimeout(() => setAddToastMessage(null), 4000);
+    if (!activeToast) return;
+    const t = setTimeout(() => { setAddToastMessage(null); setUpdateToastMessage(null); }, 4000);
     return () => clearTimeout(t);
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   const draftCartItem: CartItem | null =
     addingItem && !isEditingMode
@@ -203,8 +205,37 @@ export function POSScreenFSR() {
 
   const handleItemClick = useCallback(
     (id: string) => {
+      if (editingItemId && editingItemId !== id) {
+        const prevItem = cartItems.find((i) => i.id === editingItemId);
+        setCartItems((prev) => prev.map((ci) => ci.id === editingItemId ? { ...ci, quantity: draftQuantity, modifiers: draftModifiers, note: draftOptions.note || undefined, fulfillmentMethod: draftOptions.fulfillmentMethod, taxes: draftOptions.taxes, discounts: draftOptions.discounts, serviceCharges: draftOptions.serviceCharges, seatId: editDraftSeatId ?? undefined } : ci));
+        if (prevItem) { setUpdateToastMessage(`${prevItem.name} updated.`); }
+      }
       const item = cartItems.find((i) => i.id === id);
       if (!item) return;
+
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+            courseId: activeCourseId,
+            seatId: addDraftSeatId ?? undefined,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+      }
+
       setAddingItem(null);
       setAddDraftSeatId(null);
       setAddToastMessage(null);
@@ -222,7 +253,7 @@ export function POSScreenFSR() {
         serviceCharges: item.serviceCharges ?? [],
       });
     },
-    [cartItems]
+    [cartItems, editingItemId, draftQuantity, draftModifiers, draftOptions, editDraftSeatId, addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, activeCourseId, addDraftSeatId]
   );
 
   const handleRequirementClick = useCallback(
@@ -233,6 +264,30 @@ export function POSScreenFSR() {
       }
       const item = cartItems.find((i) => i.id === itemId);
       if (!item) return;
+
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+            courseId: activeCourseId,
+            seatId: addDraftSeatId ?? undefined,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+      }
+
       setAddingItem(null);
       setAddDraftSeatId(null);
       setAddToastMessage(null);
@@ -252,7 +307,7 @@ export function POSScreenFSR() {
       }
       setEditScrollSignal({ groupId, nonce: Date.now() });
     },
-    [addingItem, cartItems, editingItemId]
+    [addingItem, cartItems, editingItemId, addDraftQuantity, addDraftModifiers, addDraftOptions, activeCourseId, addDraftSeatId]
   );
 
   const handleEditCancel = useCallback(() => {
@@ -494,7 +549,7 @@ export function POSScreenFSR() {
         }}
       />
 
-      {addToastMessage && (
+      {activeToast && (
         <div
           className="absolute left-1/2 z-50 w-[600px] max-w-[calc(100%-32px)] transition-transform duration-300 ease-out"
           style={{
@@ -502,10 +557,10 @@ export function POSScreenFSR() {
             transform: `translateX(-50%) translateY(${toastVisible ? "0" : "200%"})`,
           }}
         >
-          <div className="flex items-center gap-3 bg-[#cc0023] px-4 py-4 rounded-lg shadow-xl">
-            <AlertCircle className="w-6 h-6 text-white shrink-0" />
-            <p className="flex-1 text-[16px] text-white leading-6">{addToastMessage}</p>
-            <button onClick={() => setAddToastMessage(null)} className="shrink-0">
+          <div className={`flex items-center gap-3 px-4 py-4 rounded-[16px] shadow-xl ${addToastMessage ? "bg-[#cc0023]" : "bg-[#232323]"}`}>
+            {addToastMessage ? <AlertCircle className="w-6 h-6 text-white shrink-0" /> : <CheckCircle className="w-6 h-6 text-[#00a63e] shrink-0" />}
+            <p className="flex-1 text-[16px] text-white leading-6">{activeToast}</p>
+            <button onClick={() => { setAddToastMessage(null); setUpdateToastMessage(null); }} className="shrink-0">
               <X className="w-6 h-6 text-white" />
             </button>
           </div>

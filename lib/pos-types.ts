@@ -161,6 +161,15 @@ export const RETAIL_ORDER_FULFILLMENTS: RetailOrderFulfillment[] = [
   { id: "pickup", label: "Pickup" },
 ];
 
+// --- Order-level fulfillments (non-retail POS: Standard, Variant A, Voice, QSR, FSR) ---
+
+export const POS_ORDER_FULFILLMENTS: RetailOrderFulfillment[] = [
+  { id: "for-here", label: "For here" },
+  { id: "pick-up", label: "Pickup" },
+  { id: "to-go", label: "To go" },
+  { id: "delivery", label: "Delivery" },
+];
+
 // --- Sent items (FSR) ---
 
 export interface SentCourseGroup {

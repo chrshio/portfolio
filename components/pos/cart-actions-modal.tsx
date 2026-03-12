@@ -30,12 +30,15 @@ interface CartActionsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onClearCart?: () => void;
+  /** When provided, clicking "Fulfillment" calls this then closes the actions modal (e.g. open fulfillment method modal). */
+  onFulfillmentClick?: () => void;
 }
 
 export function CartActionsModal({
   open,
   onOpenChange,
   onClearCart,
+  onFulfillmentClick,
 }: CartActionsModalProps) {
   const actions: ActionRow[] = [
     { id: "clear-cart", label: "Clear cart", icon: XCircle, destructive: true, onClick: onClearCart },
@@ -43,7 +46,7 @@ export function CartActionsModal({
     { id: "void-check", label: "Void check", icon: FileX },
     { id: "pre-authorize", label: "Pre-authorize", icon: CreditCard },
     { id: "split-check", label: "Split check", icon: Files },
-    { id: "fulfillment", label: "Fulfillment", icon: UtensilsCrossed },
+    { id: "fulfillment", label: "Fulfillment", icon: UtensilsCrossed, onClick: onFulfillmentClick },
     { id: "service-charge", label: "Service charge", icon: FilePlus },
   ];
 

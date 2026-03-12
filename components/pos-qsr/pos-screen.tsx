@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
-import { AlertCircle, X, Search, Check } from "lucide-react";
+import { AlertCircle, CheckCircle, X, Search, Check } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
 import { MenuGridQSR } from "@/components/pos-qsr/menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit-panel";
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
+import { FulfillmentMethodModal } from "@/components/pos/fulfillment-method-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
 import { ChargeScreen } from "@/components/pos/charge-screen";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition, NavItem, MenuId } from "@/lib/pos-types";
+import { POS_ORDER_FULFILLMENTS } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -99,9 +101,12 @@ export function POSScreenQSR() {
 
   // Toast + scroll signal for the add panel validation.
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
+  const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editDraftComboSelections, setEditDraftComboSelections] = useState<Record<string, { itemId: string; modifiers?: string[] }>>({});
+  const [orderFulfillment, setOrderFulfillment] = useState("for-here");
+  const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
   /** When set, left panel shows slot-detail view (combo name > slot item) for this slot. */
   const [editingComboSlotId, setEditingComboSlotId] = useState<string | null>(null);
   const addSlotSelectionSnapshotRef = useRef<Record<string, { itemId: string; modifiers?: string[] } | undefined>>({});
@@ -116,6 +121,7 @@ export function POSScreenQSR() {
   const [onboardingSearch, setOnboardingSearch] = useState("");
 
   // Slide-in animation for the toast.
+  const activeToast = addToastMessage ?? updateToastMessage;
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
@@ -128,7 +134,7 @@ export function POSScreenQSR() {
   const menuLabel = activeMenuId === "lunch" ? "Lunch" : "Dinner";
 
   useEffect(() => {
-    if (addToastMessage) {
+    if (activeToast) {
       // Double-RAF so the element is in the DOM before the transition starts.
       toastRafRef.current = requestAnimationFrame(() => {
         toastRafRef.current = requestAnimationFrame(() => setToastVisible(true));
@@ -139,14 +145,14 @@ export function POSScreenQSR() {
     return () => {
       if (toastRafRef.current != null) cancelAnimationFrame(toastRafRef.current);
     };
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   // Auto-dismiss the toast after 4 seconds.
   useEffect(() => {
-    if (!addToastMessage) return;
-    const t = setTimeout(() => setAddToastMessage(null), 4000);
+    if (!activeToast) return;
+    const t = setTimeout(() => { setAddToastMessage(null); setUpdateToastMessage(null); }, 4000);
     return () => clearTimeout(t);
-  }, [addToastMessage]);
+  }, [activeToast]);
 
   // After opening add panel from combo onboarding, auto-open slot detail for first slot that needs modifier selection.
   useEffect(() => {
@@ -424,8 +430,65 @@ export function POSScreenQSR() {
 
   const handleItemClick = useCallback(
     (id: string) => {
+      if (editingItemId && editingItemId !== id) {
+        const prevItem = cartItems.find((i) => i.id === editingItemId);
+        setCartItems((prev) =>
+          prev.map((ci) =>
+            ci.id === editingItemId
+              ? {
+                  ...ci,
+                  quantity: draftQuantity,
+                  modifiers: draftModifiers,
+                  ...(ci.menuItemId != null && Object.keys(editDraftComboSelections).length > 0
+                    ? { comboSelections: editDraftComboSelections, menuItemId: ci.menuItemId }
+                    : {}),
+                  note: draftOptions.note || undefined,
+                  fulfillmentMethod: draftOptions.fulfillmentMethod,
+                  taxes: draftOptions.taxes,
+                  discounts: draftOptions.discounts,
+                  serviceCharges: draftOptions.serviceCharges,
+                }
+              : ci
+          )
+        );
+        if (prevItem) {
+          setUpdateToastMessage(`${prevItem.name} updated.`);
+        }
+        setEditingComboSlotId(null);
+        setEditDraftComboSelections({});
+      }
+
       const item = cartItems.find((i) => i.id === id);
       if (!item) return;
+
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        const comboDef = getComboDefinition(addingItem.id);
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            ...(comboDef && Object.keys(addDraftComboSelections).length > 0
+              ? { comboSelections: addDraftComboSelections, menuItemId: addingItem.id }
+              : {}),
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+        setEditingComboSlotId(null);
+        setAddPendingModifierSlotQueue([]);
+        addSlotSelectionSnapshotRef.current = {};
+      }
+
       setAddingItem(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
@@ -440,16 +503,16 @@ export function POSScreenQSR() {
         discounts: item.discounts ?? [],
         serviceCharges: item.serviceCharges ?? [],
       });
-      const comboDef = item.menuItemId ? getComboDefinition(item.menuItemId) : null;
+      const comboDef2 = item.menuItemId ? getComboDefinition(item.menuItemId) : null;
       setEditDraftComboSelections(
         item.comboSelections && Object.keys(item.comboSelections).length > 0
           ? item.comboSelections
-          : comboDef
-            ? getDefaultComboSelections(comboDef)
+          : comboDef2
+            ? getDefaultComboSelections(comboDef2)
             : {}
       );
     },
-    [cartItems]
+    [cartItems, editingItemId, draftQuantity, draftModifiers, draftOptions, editDraftComboSelections, addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, addDraftComboSelections]
   );
 
   const handleRequirementClick = useCallback(
@@ -462,7 +525,34 @@ export function POSScreenQSR() {
       const item = cartItems.find((i) => i.id === itemId);
       if (!item) return;
 
-      // Entering edit flow should always exit add flow.
+      if (addingItem) {
+        const uniqueId = `${addingItem.id}-${Date.now()}`;
+        const comboDef = getComboDefinition(addingItem.id);
+        setCartItems((prev) => [
+          ...prev,
+          {
+            id: uniqueId,
+            name: addingItem.name,
+            price: addingItem.price,
+            quantity: addDraftQuantity,
+            description: addingItem.description,
+            modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+            ...(comboDef && Object.keys(addDraftComboSelections).length > 0
+              ? { comboSelections: addDraftComboSelections, menuItemId: addingItem.id }
+              : {}),
+            note: addDraftOptions.note || undefined,
+            fulfillmentMethod: addDraftOptions.fulfillmentMethod,
+            taxes: addDraftOptions.taxes,
+            discounts: addDraftOptions.discounts,
+            serviceCharges: addDraftOptions.serviceCharges,
+          },
+        ]);
+        setUpdateToastMessage(`${addingItem.name} added.`);
+        setEditingComboSlotId(null);
+        setAddPendingModifierSlotQueue([]);
+        addSlotSelectionSnapshotRef.current = {};
+      }
+
       setAddingItem(null);
       setAddToastMessage(null);
       setAddScrollSignal(null);
@@ -499,7 +589,7 @@ export function POSScreenQSR() {
         setEditScrollSignal({ groupId, nonce: Date.now() });
       }
     },
-    [addingItem, cartItems, editingItemId]
+    [addingItem, cartItems, editingItemId, addDraftQuantity, addDraftModifiers, addDraftOptions, addDraftComboSelections]
   );
 
   const handleEditCancel = useCallback(() => {
@@ -681,11 +771,28 @@ export function POSScreenQSR() {
                 onAddSlotDone={handleAddSlotDone}
                 onRemoveItem={handleRemoveCartItem}
                 onClearCart={handleClearCart}
+                orderFulfillmentLabel={
+                  orderFulfillment !== "for-here"
+                    ? POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? orderFulfillment
+                    : undefined
+                }
+                onFulfillmentHeaderClick={
+                  orderFulfillment !== "for-here" ? () => setFulfillmentModalOpen(true) : undefined
+                }
+                onFulfillmentClick={() => setFulfillmentModalOpen(true)}
                 getMenuItemById={getMenuItemByIdResolved}
                 getComboDefinition={getComboDefinition}
               />
             </div>
           </div>
+
+          <FulfillmentMethodModal
+            open={fulfillmentModalOpen}
+            onOpenChange={setFulfillmentModalOpen}
+            selectedId={orderFulfillment}
+            onSelect={setOrderFulfillment}
+            options={POS_ORDER_FULFILLMENTS}
+          />
 
           {showChargeScreen && (
             <div className="absolute inset-0 z-10 flex flex-col justify-end">
@@ -799,7 +906,7 @@ export function POSScreenQSR() {
       })()}
 
       {/* Toast — centered above the bottom nav bar, slides up from below */}
-      {addToastMessage && (
+      {activeToast && (
         <div
           className="absolute left-1/2 z-50 w-[600px] max-w-[calc(100%-32px)] transition-transform duration-300 ease-out"
           style={{
@@ -807,10 +914,14 @@ export function POSScreenQSR() {
             transform: `translateX(-50%) translateY(${toastVisible ? "0" : "200%"})`,
           }}
         >
-          <div className="flex items-center gap-3 bg-[#cc0023] px-4 py-4 rounded-lg shadow-xl">
-            <AlertCircle className="w-6 h-6 text-white shrink-0" />
-            <p className="flex-1 text-[16px] text-white leading-6">{addToastMessage}</p>
-            <button onClick={() => setAddToastMessage(null)} className="shrink-0">
+          <div className={`flex items-center gap-3 px-4 py-4 rounded-[16px] shadow-xl ${addToastMessage ? "bg-[#cc0023]" : "bg-[#232323]"}`}>
+            {addToastMessage ? (
+              <AlertCircle className="w-6 h-6 text-white shrink-0" />
+            ) : (
+              <CheckCircle className="w-6 h-6 text-[#00a63e] shrink-0" />
+            )}
+            <p className="flex-1 text-[16px] text-white leading-6">{activeToast}</p>
+            <button onClick={() => { setAddToastMessage(null); setUpdateToastMessage(null); }} className="shrink-0">
               <X className="w-6 h-6 text-white" />
             </button>
           </div>
