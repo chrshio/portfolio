@@ -130,6 +130,13 @@
   display: none;
 }
 
+/* Text link pattern: black with slightly more font weight (no blue) */
+@layer components {
+  .text-link {
+    @apply font-semibold text-[#101010] underline cursor-pointer;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

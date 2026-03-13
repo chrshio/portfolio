@@ -24,20 +24,23 @@ const navItems: NavItemConfig[] = [
   { id: "more", label: "More", icon: Menu },
 ];
 
-const enabledTabs: Set<NavItem> = new Set(["checkout", "more"]);
+const defaultEnabledTabs: Set<NavItem> = new Set(["checkout", "more"]);
 
 interface BottomNavigationProps {
   activeTab?: NavItem;
   onTabChange?: (tab: NavItem) => void;
+  /** Tabs that are clickable. If not provided, checkout and more are enabled. */
+  enabledTabs?: NavItem[];
 }
 
-export function BottomNavigation({ activeTab = "checkout", onTabChange }: BottomNavigationProps) {
+export function BottomNavigation({ activeTab = "checkout", onTabChange, enabledTabs: enabledTabsProp }: BottomNavigationProps) {
+  const enabledSet = enabledTabsProp ? new Set(enabledTabsProp) : defaultEnabledTabs;
   return (
     <nav className="flex items-center justify-center gap-2 px-4 py-2 bg-[#ffffff] border-t border-[#f0f0f0]">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = activeTab === item.id;
-        const isEnabled = enabledTabs.has(item.id);
+        const isEnabled = enabledSet.has(item.id);
 
         return (
           <button

@@ -28,7 +28,7 @@ export const projects: ProjectItem[] = [
     id: "printer-routing",
     name: "Printer routing",
     prototypes: [
-      { id: "main", name: "Printer routing", path: "/prototypes/printer-routing", ready: false },
+      { id: "main", name: "Printer routing", path: "/prototypes/printer-routing", ready: true },
     ],
   },
 ];

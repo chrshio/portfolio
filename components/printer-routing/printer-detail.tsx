@@ -1,0 +1,646 @@
+"use client";
+
+import { useState, useCallback, useRef, useEffect } from "react";
+import { ArrowLeft, MoreHorizontal, Pencil, Minus, Plus, Monitor, Smartphone, Tablet, Receipt, Tag, Code, MapPin, Barcode, AlertTriangle, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  type PrinterData,
+  type PrinterStatus,
+  type DeviceType,
+  type TicketAppearance,
+  computePrinterStatus,
+  statusConfig,
+  locationDevices,
+} from "@/lib/printer-data";
+import { EditAppearanceModal } from "./edit-appearance-modal";
+import { EditSourcesModal } from "./edit-sources-modal";
+import { PaperSizeSheet } from "./paper-size-sheet";
+
+export type { PrinterData };
+
+type Tab = "details" | "ticket-settings" | "print-history";
+
+interface PrinterDetailProps {
+  printer: PrinterData;
+  onBack: () => void;
+  onSave: (printer: PrinterData) => void;
+  onEditCategories: () => void;
+}
+
+const deviceIcon: Record<DeviceType, React.ComponentType<{ className?: string }>> = {
+  "Square Terminal": Monitor,
+  "Square Stand": Tablet,
+  "Square Handheld": Smartphone,
+};
+
+export function PrinterDetail({ printer, onBack, onSave, onEditCategories }: PrinterDetailProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("details");
+  const [draft, setDraft] = useState<PrinterData>({ ...printer, sources: printer.sources.map((s) => ({ ...s })), ticketAppearance: { ...printer.ticketAppearance } });
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [editSourcesOpen, setEditSourcesOpen] = useState(false);
+  const [paperSizeSheetOpen, setPaperSizeSheetOpen] = useState(false);
+
+  const updateDraft = useCallback((partial: Partial<PrinterData>) => {
+    setDraft((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  const handleSaveAppearance = useCallback((appearance: TicketAppearance) => {
+    setDraft((prev) => ({ ...prev, ticketAppearance: appearance }));
+  }, []);
+
+  const handleSaveSources = useCallback((selectedIds: Set<string>) => {
+    const newSources = locationDevices.filter((d) => selectedIds.has(d.id));
+    setDraft((prev) => ({ ...prev, sources: newSources }));
+  }, []);
+
+  const hasChanges =
+    JSON.stringify(draft) !== JSON.stringify(printer);
+
+  const printerStatus = computePrinterStatus(draft);
+  const status = statusConfig[printerStatus];
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "details", label: "Details" },
+    { id: "ticket-settings", label: "Ticket settings" },
+    { id: "print-history", label: "Print history" },
+  ];
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const scrollParent = sentinel.closest("[class*='overflow-y-auto']") as HTMLElement | null;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsCollapsed(!entry.isIntersecting),
+      { root: scrollParent, threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4 max-w-[800px]">
+      {/* Scroll sentinel — when this scrolls out of view, header collapses */}
+      <div ref={sentinelRef} className="h-0 w-0 shrink-0" aria-hidden />
+
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 flex flex-col bg-white pb-0 -mt-6 pt-6">
+        {/* Expanded state: two rows */}
+        <div
+          className={cn(
+            "flex flex-col gap-6 transition-all duration-200 overflow-hidden",
+            isCollapsed ? "max-h-0 opacity-0" : "max-h-[200px] opacity-100"
+          )}
+        >
+          {/* Row 1: buttons */}
+          <div className="flex items-center gap-2 w-full">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f0f0f0]"
+            >
+              <ArrowLeft className="w-5 h-5 text-[#101010]" />
+            </button>
+            <div className="flex-1" />
+            <button
+              type="button"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f0f0f0]"
+            >
+              <MoreHorizontal className="w-5 h-5 text-[#101010]" />
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 min-h-[40px] px-5 py-3 bg-[#f0f0f0] text-[#101010] rounded-full"
+            >
+              <span className="font-medium text-[15px] leading-6">Test print</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => hasChanges && onSave(draft)}
+              disabled={!hasChanges}
+              className={cn(
+                "flex items-center justify-center gap-2 min-h-[40px] px-5 py-3 rounded-full",
+                hasChanges
+                  ? "bg-[#101010] text-white"
+                  : "bg-[#f0f0f0] text-[#101010] cursor-not-allowed"
+              )}
+            >
+              <span className="font-medium text-[15px] leading-6">Save</span>
+            </button>
+          </div>
+
+          {/* Row 2: name + status */}
+          <div className="flex items-center gap-3">
+            <h2 className="font-semibold text-[25px] leading-8 text-[#101010]">
+              {draft.name}
+            </h2>
+            <Pencil className="w-4 h-4 text-[#999]" />
+            <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[13px] font-semibold", status.bg, status.text)}>
+              {status.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Collapsed state: single merged row */}
+        <div
+          className={cn(
+            "flex items-center gap-2 w-full transition-all duration-200 overflow-hidden",
+            isCollapsed ? "max-h-[60px] opacity-100 mb-4" : "max-h-0 opacity-0"
+          )}
+        >
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f0f0f0]"
+          >
+            <ArrowLeft className="w-5 h-5 text-[#101010]" />
+          </button>
+          <div className="flex-1 flex items-center justify-center min-w-0">
+            <span className="font-semibold text-[17px] leading-6 text-[#101010] truncate">
+              {draft.name}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="flex items-center justify-center gap-2 min-h-[40px] px-5 py-3 bg-[#f0f0f0] text-[#101010] rounded-full"
+          >
+            <span className="font-medium text-[15px] leading-6">Test print</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => hasChanges && onSave(draft)}
+            disabled={!hasChanges}
+            className={cn(
+              "flex items-center justify-center gap-2 min-h-[40px] px-5 py-3 rounded-full",
+              hasChanges
+                ? "bg-[#101010] text-white"
+                : "bg-[#f0f0f0] text-[#101010] cursor-not-allowed"
+            )}
+          >
+            <span className="font-medium text-[15px] leading-6">Save</span>
+          </button>
+        </div>
+
+        {/* Critical / not-configured banner */}
+        {!isCollapsed && (printerStatus === "critical" || printerStatus === "not-configured") && (
+          <div className="flex gap-3 items-start min-h-[56px] p-4 rounded-[6px] bg-[#ffe5ea] border border-[#ffccd5] mb-0 mt-4">
+            <AlertCircle className="w-6 h-6 text-[#bf0020] shrink-0" />
+            <span className="text-[16px] leading-6 text-[#101010]">
+              {printerStatus === "not-configured"
+                ? "Not configured"
+                : "All connected sources are offline"}
+            </span>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className={cn("flex items-center gap-6 border-b border-[#e5e5e5]", !isCollapsed && "mt-4")}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "pb-2 text-[19px] leading-6 font-semibold border-b-2 -mb-px transition-colors",
+                activeTab === tab.id
+                  ? "border-[#101010] text-[#101010]"
+                  : "border-transparent text-[#666]"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      {activeTab === "ticket-settings" && (
+        <TicketSettingsTab
+          draft={draft}
+          updateDraft={updateDraft}
+          onEditCategories={onEditCategories}
+          onEditAppearance={() => setAppearanceOpen(true)}
+        />
+      )}
+      {activeTab === "details" && (
+        <DetailsTab
+          draft={draft}
+          onEditSources={() => setEditSourcesOpen(true)}
+          onEditPaperSize={() => setPaperSizeSheetOpen(true)}
+        />
+      )}
+      {activeTab === "print-history" && (
+        <div className="flex flex-col items-center justify-center py-16 text-[15px] text-[#666]">
+          No print history available.
+        </div>
+      )}
+
+      <EditAppearanceModal
+        open={appearanceOpen}
+        onOpenChange={setAppearanceOpen}
+        appearance={draft.ticketAppearance}
+        onSave={handleSaveAppearance}
+      />
+      <EditSourcesModal
+        open={editSourcesOpen}
+        onOpenChange={setEditSourcesOpen}
+        selectedIds={new Set(draft.sources.map((s) => s.id))}
+        onSave={handleSaveSources}
+      />
+      <PaperSizeSheet
+        open={paperSizeSheetOpen}
+        onOpenChange={setPaperSizeSheetOpen}
+        paperSize={draft.paperSize}
+        onSelect={(paperSize) => updateDraft({ paperSize })}
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!enabled)}
+      className={cn(
+        "relative w-[40px] h-[24px] rounded-[100px] shrink-0 transition-colors",
+        enabled ? "bg-[#101010]" : "border-2 border-solid border-[#959595] bg-transparent"
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-1/2 h-[14px] w-[14px] -translate-y-1/2 rounded-full transition-transform",
+          enabled
+            ? "left-[calc(100%-18px)] bg-white"
+            : "left-[3px] bg-[#959595]"
+        )}
+      />
+    </button>
+  );
+}
+
+function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center border border-[#dadada] rounded-[21px] overflow-hidden shrink-0">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(1, value - 1))}
+        className="flex items-center justify-center w-10 h-10 text-[#666]"
+      >
+        <Minus className="w-4 h-4" />
+      </button>
+      <span className="w-10 text-center text-[15px] font-medium text-[#101010] tabular-nums">{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="flex items-center justify-center w-10 h-10 text-[#666]"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function SettingsRow({
+  label,
+  subtitle,
+  trailing,
+  hideDivider,
+}: {
+  label: string;
+  subtitle?: string;
+  trailing: React.ReactNode;
+  hideDivider?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between py-3 min-h-[48px]",
+        !hideDivider && "border-b border-[#f0f0f0]"
+      )}
+    >
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1 mr-4">
+        <span className="text-[15px] leading-[22px] font-medium text-[#101010]">{label}</span>
+        {subtitle && (
+          <span className="text-[13px] leading-[18px] text-[#666]">{subtitle}</span>
+        )}
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+function SectionHeader({ label, trailing }: { label: string; trailing: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between pt-2 pb-2 mb-2">
+      <h3 className="text-[19px] leading-6 font-semibold text-[#101010]">{label}</h3>
+      {trailing}
+    </div>
+  );
+}
+
+function SectionDivider() {
+  return <div className="h-2 bg-black/5 rounded-[2px] w-full shrink-0" />;
+}
+
+function DetailsSectionHeader({
+  label,
+  onEdit,
+}: {
+  label: string;
+  onEdit?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between min-h-[40px] py-0">
+      <h3 className="text-[19px] leading-[26px] font-semibold text-[#101010] flex-1 min-w-0">
+        {label}
+      </h3>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-link shrink-0 py-2 px-2 text-[14px] leading-[22px]"
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SourceRow({
+  icon: Icon,
+  primary,
+  secondary,
+  tertiary,
+  status,
+  isLast,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  primary: string;
+  secondary: string;
+  tertiary?: string;
+  status?: { label: string; bg: string; text: string };
+  isLast?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex gap-4 items-center py-4",
+        !isLast && "border-b border-black/5"
+      )}
+    >
+      <div className="shrink-0 flex items-center justify-center p-2 rounded-[6px] bg-black/5">
+        <Icon className="w-6 h-6 text-[#101010]" />
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <span className="text-[16px] leading-6 font-medium text-[#101010]">{primary}</span>
+        <span className="text-[14px] leading-[22px] text-[#666]">{secondary}</span>
+        {tertiary && (
+          <span className="text-[14px] leading-[22px] text-[#666]">{tertiary}</span>
+        )}
+      </div>
+      {status && (
+        <span className={cn("shrink-0 inline-flex items-center rounded-full text-[14px] font-semibold px-3 py-1", status.bg, status.text)}>
+          {status.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DetailCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex gap-3 items-center shrink-0 w-[200px]">
+      <div className="shrink-0 flex items-center justify-center p-2 rounded-[6px] bg-black/5">
+        <Icon className="w-6 h-6 text-[#101010]" />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[16px] leading-6 font-semibold text-[#101010]">{label}</span>
+        <span className="text-[14px] leading-[22px] text-[#101010]">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function DetailsTab({
+  draft,
+  onEditSources,
+  onEditPaperSize,
+}: {
+  draft: PrinterData;
+  onEditSources: () => void;
+  onEditPaperSize: () => void;
+}) {
+  const hasSources = draft.sources.length > 0;
+
+  return (
+    <div className="flex flex-col gap-6 w-full pt-4 pb-4">
+      {/* Sources */}
+      <div className="flex flex-col w-full">
+        <DetailsSectionHeader label="Sources" onEdit={onEditSources} />
+        <div className="flex flex-col w-full mt-0">
+          {hasSources ? (
+            draft.sources.map((source, i) => (
+              <SourceRow
+                key={source.id}
+                icon={deviceIcon[source.deviceType]}
+                primary={source.name}
+                secondary={source.deviceType}
+                tertiary={source.codeName}
+                status={
+                  source.isOnline
+                    ? { label: "Online", bg: "bg-[#e5ffee]", text: "text-[#007d2a]" }
+                    : { label: "Offline", bg: "bg-[#ffe5ea]", text: "text-[#bf0020]" }
+                }
+                isLast={i === draft.sources.length - 1}
+              />
+            ))
+          ) : (
+            <div className="flex gap-4 items-center py-2">
+              <AlertTriangle className="w-6 h-6 text-[#f25b3d] shrink-0" />
+              <span className="text-[16px] leading-6 font-medium text-[#101010]">
+                No order sources connected
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <SectionDivider />
+
+      {/* Paper size */}
+      <div className="flex flex-col w-full">
+        <DetailsSectionHeader label="Paper size" onEdit={onEditPaperSize} />
+        <div className="flex gap-4 items-center py-4">
+          <div className="shrink-0 flex items-center justify-center p-2 rounded-[6px] bg-black/5">
+            <Receipt className="w-6 h-6 text-[#101010]" />
+          </div>
+          <span className="text-[16px] leading-6 font-medium text-[#101010]">{draft.paperSize}</span>
+        </div>
+      </div>
+
+      <SectionDivider />
+
+      {/* Printer details */}
+      <div className="flex flex-col gap-8 w-full">
+        <DetailsSectionHeader label="Printer details" />
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-wrap gap-x-6 gap-y-6 items-start justify-between">
+            <DetailCard icon={Receipt} label="Type" value="Receipt printer" />
+            <DetailCard icon={Tag} label="Model" value={draft.model} />
+            <DetailCard icon={Code} label="Connection" value={draft.connection} />
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-6 items-start justify-between">
+            <DetailCard icon={Receipt} label="Paper type" value={draft.paperType} />
+            <DetailCard icon={MapPin} label="IP Address" value={draft.ipAddress} />
+            <DetailCard icon={Barcode} label="Serial number" value={draft.serialNumber} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function getAppearanceSummary(a: TicketAppearance): string {
+  const parts: string[] = [];
+  if (a.compactTicket) parts.push("Compact");
+  if (a.singleItemPerTicket) parts.push("Single item");
+  if (a.combineIdenticalItems) parts.push("Combined");
+  if (a.includeTopPadding) parts.push("Top padding");
+  if (a.printKitchenNames) parts.push("Kitchen names");
+  return parts.length > 0 ? parts.join(", ") : "Default ticket style";
+}
+
+function TicketSettingsTab({
+  draft,
+  updateDraft,
+  onEditCategories,
+  onEditAppearance,
+}: {
+  draft: PrinterData;
+  updateDraft: (p: Partial<PrinterData>) => void;
+  onEditCategories: () => void;
+  onEditAppearance: () => void;
+}) {
+  return (
+    <div className="flex flex-col pt-4">
+      {/* Receipts */}
+      <SectionHeader
+        label="Receipts"
+        trailing={<ToggleSwitch enabled={draft.receiptsEnabled} onChange={(v) => updateDraft({ receiptsEnabled: v })} />}
+      />
+      {draft.receiptsEnabled && (
+        <>
+          <SettingsRow
+            label="Print receipts automatically"
+            trailing={<ToggleSwitch enabled={draft.autoPrintReceipts} onChange={(v) => updateDraft({ autoPrintReceipts: v })} />}
+          />
+          <SettingsRow
+            label="Number of copies"
+            trailing={<Stepper value={draft.receiptCopies} onChange={(v) => updateDraft({ receiptCopies: v })} />}
+            hideDivider
+          />
+        </>
+      )}
+
+      {/* Divider */}
+      <div className="my-4 h-2 bg-black/5" />
+
+      {/* In-person orders */}
+      <SectionHeader
+        label="In-person orders"
+        trailing={<ToggleSwitch enabled={draft.inPersonEnabled} onChange={(v) => updateDraft({ inPersonEnabled: v })} />}
+      />
+      {draft.inPersonEnabled && (
+        <>
+          <SettingsRow
+            label="Categories"
+            subtitle={draft.inPersonCategories || "All categories, all items"}
+            trailing={
+              <button type="button" onClick={onEditCategories} className="text-link text-[15px]">
+                Edit
+              </button>
+            }
+          />
+          <SettingsRow
+            label="Appearance"
+            subtitle={getAppearanceSummary(draft.ticketAppearance)}
+            trailing={
+              <button type="button" onClick={onEditAppearance} className="text-link text-[15px]">
+                Edit
+              </button>
+            }
+          />
+          <SettingsRow
+            label="Number of copies"
+            trailing={<Stepper value={1} onChange={() => {}} />}
+            hideDivider
+          />
+        </>
+      )}
+
+      {/* Divider */}
+      <div className="my-4 h-2 bg-black/5" />
+
+      {/* Online and kiosk orders */}
+      <SectionHeader
+        label="Online and kiosk orders"
+        trailing={<ToggleSwitch enabled={draft.onlineEnabled} onChange={(v) => updateDraft({ onlineEnabled: v })} />}
+      />
+      {draft.onlineEnabled && (
+        <SettingsRow
+          label="Same as in-person order settings"
+          hideDivider
+          trailing={
+            <button
+              type="button"
+              onClick={() => updateDraft({ sameAsInPerson: !draft.sameAsInPerson })}
+              className={cn(
+                "w-5 h-5 shrink-0 rounded border-2 flex items-center justify-center",
+                draft.sameAsInPerson ? "bg-[#101010] border-[#101010]" : "border-[#959595]"
+              )}
+            >
+              {draft.sameAsInPerson && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+            </button>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function Check(props: React.SVGProps<SVGSVGElement> & { strokeWidth?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={props.strokeWidth ?? 2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
