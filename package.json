@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/generate-last-updated.mjs && next build",
+    "postinstall": "node scripts/generate-last-updated.mjs",
     "start": "next start",
     "lint": "eslint ."
   },
