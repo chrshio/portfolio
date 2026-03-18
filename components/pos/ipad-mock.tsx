@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { DialogContainerProvider } from "@/components/ui/dialog-container-context";
 
@@ -12,10 +13,40 @@ interface IPadMockProps {
 
 export function IPadMock({ children, fillContainer = false }: IPadMockProps) {
   const screenRef = React.useRef<HTMLDivElement>(null);
+  const [cursor, setCursor] = React.useState<{ x: number; y: number } | null>(null);
+
+  React.useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "ipad-mock-cursor";
+    style.textContent = "*, *::before, *::after { cursor: none !important; }";
+    document.head.appendChild(style);
+
+    const handleMove = (e: MouseEvent) => setCursor({ x: e.clientX, y: e.clientY });
+    const handleLeave = () => setCursor(null);
+
+    window.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseleave", handleLeave);
+
+    return () => {
+      document.getElementById("ipad-mock-cursor")?.remove();
+      window.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseleave", handleLeave);
+    };
+  }, []);
+
+  const cursorEl = cursor && (
+    <div
+      className="pointer-events-none fixed left-0 top-0 z-[99999] size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/55 bg-[rgba(80,80,80,0.35)] shadow-[0_0_0_1px_rgba(255,255,255,0.2)]"
+      style={{ left: cursor.x, top: cursor.y }}
+      aria-hidden
+    />
+  );
+
   return (
     <DialogContainerProvider
       value={{ containerRef: screenRef, contained: true }}
     >
+      {typeof document !== "undefined" && createPortal(cursorEl ?? null, document.body)}
       <div
         className={`relative flex w-full items-center justify-center bg-[#1a1a1a] p-4 sm:p-6 md:p-8 ${fillContainer ? "min-h-0 h-full" : "min-h-screen"}`}
       >
