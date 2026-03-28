@@ -81,12 +81,63 @@ export function useVoiceOrder(callbacks: VoiceOrderCallbacks): UseVoiceOrderRetu
     []
   );
 
+  const resolveCartItem = (
+    snapshot: Array<{ id: string; name: string; modifiers?: string[] }>,
+    actionItemId: string,
+    actionModifiers: string[],
+  ) => {
+    const exact = snapshot.find((item) => item.id === actionItemId);
+    if (exact) return exact;
+    // Fallback: the LLM may have sent the menu-item id (e.g. "latte")
+    // instead of the cart-item id (e.g. "latte-1741628962000-1").
+    const actionSet = new Set(actionModifiers);
+    return (
+      snapshot.find((item) => {
+        if (!item.id.startsWith(`${actionItemId}-`)) return false;
+        const existing = item.modifiers ?? [];
+        return existing.length < actionModifiers.length ||
+          (existing.length > 0 && existing.every((m) => actionSet.has(m)));
+      }) ??
+      snapshot.find((item) => item.id.startsWith(`${actionItemId}-`))
+    );
+  };
+
+  const mergeModifiers = (existing: string[], incoming: string[]) =>
+    Array.from(new Set([...existing, ...incoming]));
+
   const applyActions = useCallback((actions: VoiceOrderAction[]) => {
     for (const action of actions) {
       if (action.type === "add_item") {
+        // Guard: if the LLM sends add_item with modifiers for a menu item that
+        // already exists in the cart with incomplete modifiers (or modifiers that
+        // are a subset of the incoming ones), treat it as a set_modifier update
+        // so the original item gets configured in-place instead of being duplicated.
+        if (action.modifiers?.length && callbacksRef.current.onSetModifier) {
+          const snapshot = callbacksRef.current.getCartSnapshot();
+          const actionSet = new Set(action.modifiers);
+          const existingIncomplete = snapshot.find((item) => {
+            if (!item.id.startsWith(`${action.itemId}-`)) return false;
+            const existing = item.modifiers ?? [];
+            if (existing.length === 0) return true;
+            return existing.length <= action.modifiers!.length &&
+              existing.every((m) => actionSet.has(m));
+          });
+          if (existingIncomplete) {
+            const merged = mergeModifiers(existingIncomplete.modifiers ?? [], action.modifiers);
+            callbacksRef.current.onSetModifier(existingIncomplete.id, merged);
+            continue;
+          }
+        }
         callbacksRef.current.onAddItem(action.itemId, action.modifiers);
       } else if (action.type === "set_modifier" && callbacksRef.current.onSetModifier && action.modifiers) {
-        callbacksRef.current.onSetModifier(action.itemId, action.modifiers);
+        const snapshot = callbacksRef.current.getCartSnapshot();
+        const target = resolveCartItem(snapshot, action.itemId, action.modifiers);
+        if (target) {
+          // Merge rather than replace so optimistic updates from pill taps
+          // are never clobbered by a stale API response with fewer modifiers.
+          const merged = mergeModifiers(target.modifiers ?? [], action.modifiers);
+          callbacksRef.current.onSetModifier(target.id, merged);
+        }
       }
     }
   }, []);
@@ -181,6 +232,21 @@ export function useVoiceOrder(callbacks: VoiceOrderCallbacks): UseVoiceOrderRetu
           };
         })
       );
+
+      // Optimistically apply the modifier so the cart updates immediately
+      // instead of waiting for the API round-trip. This also guards against
+      // the LLM failing to emit a set_modifier action for the target item.
+      if (pendingFollowUp.current && callbacksRef.current.onSetModifier) {
+        const { targetItemId } = pendingFollowUp.current;
+        const snapshot = callbacksRef.current.getCartSnapshot();
+        const targetItem =
+          snapshot.find((item) => item.id === targetItemId) ??
+          snapshot.find((item) => item.id.startsWith(`${targetItemId}-`));
+        if (targetItem) {
+          const existing = targetItem.modifiers ?? [];
+          callbacksRef.current.onSetModifier(targetItem.id, [...existing, optionLabel]);
+        }
+      }
 
       processTranscript(optionLabel);
     },

@@ -506,7 +506,7 @@ export function POSScreenVoice() {
 
       <div className="flex-1 min-h-0 relative flex flex-col">
         {activeTab === "more" ? (
-          <SettingsPage variantLabel="*Vision*" onLoadingChange={setSettingsLoading} />
+          <SettingsPage variantLabel="Voice" onLoadingChange={setSettingsLoading} />
         ) : (
           <>
             <div className="flex flex-1 min-h-0 rounded-xl overflow-hidden">

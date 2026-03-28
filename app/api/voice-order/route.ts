@@ -1,6 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
+// Modifier keywords detectable from customer speech, used as a safety net when
+// gpt-4o-mini fails to include mentioned modifiers in the add_item action.
+const TRANSCRIPT_MODIFIER_PATTERNS: Array<{ pattern: RegExp; group: string; value: string }> = [
+  { pattern: /\biced\b/i, group: "temperature", value: "Iced" },
+  { pattern: /\bhot\b/i, group: "temperature", value: "Hot" },
+  { pattern: /\bcold\b/i, group: "temperature", value: "Cold" },
+  { pattern: /\boat(?:\s+milk)?\b/i, group: "milk", value: "Oat" },
+  { pattern: /\bwhole(?:\s+milk)?\b/i, group: "milk", value: "Whole" },
+  { pattern: /\bskim(?:\s+milk)?\b/i, group: "milk", value: "Skim" },
+  { pattern: /\bhemp(?:\s+milk)?\b/i, group: "milk", value: "Hemp" },
+  { pattern: /\bsoy(?:\s+milk)?\b/i, group: "milk", value: "Soy" },
+  { pattern: /\bcoconut(?:\s+milk)?\b/i, group: "milk", value: "Coconut" },
+  { pattern: /\bsmall\b/i, group: "variations", value: "8oz" },
+  { pattern: /\blarge\b/i, group: "variations", value: "12oz" },
+  { pattern: /\b8\s*oz\b/i, group: "variations", value: "8oz" },
+  { pattern: /\b12\s*oz\b/i, group: "variations", value: "12oz" },
+  { pattern: /\bvanilla\b/i, group: "add-ons", value: "Vanilla syrup" },
+  { pattern: /\bextra shot\b/i, group: "add-ons", value: "Extra shot" },
+  { pattern: /\bdrizzle\b/i, group: "add-ons", value: "Drizzle" },
+  { pattern: /\bhoney\b/i, group: "add-ons", value: "Honey" },
+];
+
+const BEVERAGE_IDS = new Set([
+  "cappuccino", "matcha", "iced-coffee", "latte", "espresso",
+  "earl-grey", "green", "turmeric", "ginger", "chamomile",
+  "iced-earl-grey", "iced-green", "iced-matcha", "arnold-palmer", "peach-tea",
+]);
+
+const REQUIRED_BEVERAGE_GROUPS = ["variations", "milk", "temperature"] as const;
+
+function coveredGroups(modifiers: string[]): Set<string> {
+  const groups = new Set<string>();
+  for (const mod of modifiers) {
+    for (const tm of TRANSCRIPT_MODIFIER_PATTERNS) {
+      if (tm.value === mod) { groups.add(tm.group); break; }
+    }
+  }
+  return groups;
+}
+
 const MENU_CONTEXT = `
 You are a POS voice-order assistant for a café. Parse customer speech into structured order actions against this menu.
 
@@ -40,8 +80,8 @@ BAKERY MODIFIERS:
 ## Rules
 
 1. When a customer orders, identify the menu item and any modifiers they mention.
-2. If the customer specifies a modifier that maps to a known option, include it. Only map exact matches. If they say something not in the options, note it in your message but don't add an invalid modifier.
-3. For beverages, the required modifiers are: variations, milk, and temperature. If any required modifier is NOT specified by the customer, ask a follow-up question about it. Only ask about ONE missing group at a time.
+2. CRITICAL — Include ALL mentioned modifiers in the add_item action's "modifiers" array. "Iced latte" → add_item with modifiers ["Iced"]. "Soy iced matcha" → add_item with modifiers ["Soy", "Iced"]. "Large oat milk latte" → add_item with modifiers ["12oz", "Oat"]. Only map exact matches to known options. If they say something not in the options, note it in your message but don't add an invalid modifier.
+3. For beverages, the required modifiers are: variations, milk, and temperature. If any required modifier is NOT specified by the customer, ask a follow-up question about it. Only ask about ONE missing group at a time. Do NOT ask about groups the customer already specified (e.g. if they said "iced latte", do NOT ask about temperature).
 4. CRITICAL — Every time your assistantMessage asks the customer to choose or pick something, you MUST also set followUp to a non-null object with the full options array. The UI renders these options as tappable pills; without them the customer cannot select. The followUp object must have:
    - "question": your short question (same as assistantMessage)
    - "options": the FULL list of option ids for the modifier group being asked about
@@ -184,6 +224,91 @@ export async function POST(req: NextRequest) {
       "add-ons": ["Vanilla syrup", "Extra shot", "Drizzle", "Honey"],
     };
 
+    const BEVERAGE_REQUIRED_COUNT = 3;
+
+    // ---- Extract modifiers mentioned in the transcript but missed by the LLM ----
+    // Split the transcript into per-item segments at conjunctions so modifiers
+    // are only associated with their adjacent item (e.g. "iced latte and matcha"
+    // assigns Iced only to the latte, not the matcha).
+    if (transcript && parsed.actions?.length) {
+      const t = transcript.toLowerCase();
+      const segments = t.split(/\s+(?:and|also|plus)\s+|,\s*/);
+
+      for (const action of parsed.actions as Array<{ type: string; itemId: string; itemName?: string; modifiers?: string[] }>) {
+        if (action.type !== "add_item" || !BEVERAGE_IDS.has(action.itemId)) continue;
+
+        const groups = coveredGroups(action.modifiers ?? []);
+        const itemName = (action.itemName ?? action.itemId.replace(/-/g, " ")).toLowerCase();
+        const segment = segments.find((s) => s.includes(itemName));
+        if (!segment) continue;
+
+        for (const { pattern, group, value } of TRANSCRIPT_MODIFIER_PATTERNS) {
+          if (groups.has(group)) continue;
+          if (pattern.test(segment)) {
+            if (!action.modifiers) action.modifiers = [];
+            action.modifiers.push(value);
+            groups.add(group);
+          }
+        }
+      }
+
+      // If the followUp asks about a modifier group that's now already covered
+      // by an injected modifier, advance to the next missing required group.
+      if (parsed.followUp?.modifierGroupId) {
+        const targetAction = (parsed.actions as Array<{ type: string; itemId: string; itemName?: string; modifiers?: string[] }>)
+          .find((a) => a.type === "add_item" && BEVERAGE_IDS.has(a.itemId));
+        if (targetAction) {
+          const groups = coveredGroups(targetAction.modifiers ?? []);
+          if (groups.has(parsed.followUp.modifierGroupId)) {
+            const nextGroup = REQUIRED_BEVERAGE_GROUPS.find((g) => !groups.has(g));
+            if (nextGroup && MODIFIER_OPTIONS[nextGroup]) {
+              const groupLabel = nextGroup === "variations" ? "size" : nextGroup;
+              const name = targetAction.itemName ?? targetAction.itemId;
+              parsed.assistantMessage = `What ${groupLabel} would you like for your ${name.toLowerCase()}?`;
+              parsed.followUp = {
+                ...parsed.followUp,
+                question: parsed.assistantMessage,
+                options: MODIFIER_OPTIONS[nextGroup],
+                modifierGroupId: nextGroup,
+              };
+            } else {
+              parsed.followUp = null;
+            }
+          }
+        }
+      }
+    }
+
+    /** Determine the correct cart item a followUp question is targeting. */
+    const resolveFollowUpTarget = (
+      message: string,
+      snapshot: NonNullable<typeof cartSnapshot>,
+      hintId?: string,
+    ): string | undefined => {
+      const msg = message.toLowerCase();
+      // Match by item name mentioned in the message (e.g. "for your latte")
+      const matches = snapshot.filter((c) => msg.includes(c.name.toLowerCase()));
+      if (matches.length === 1) return matches[0].id;
+      if (matches.length > 1) {
+        const incomplete = matches.find(
+          (c) => !c.modifiers || c.modifiers.length < BEVERAGE_REQUIRED_COUNT
+        );
+        return (incomplete ?? matches[matches.length - 1]).id;
+      }
+      // If hintId is a valid cart item, use it
+      if (hintId) {
+        const found = snapshot.find(
+          (c) => c.id === hintId || c.id.startsWith(`${hintId}-`)
+        );
+        if (found) return found.id;
+      }
+      // Fallback: first item still missing required modifiers
+      const incomplete = snapshot.find(
+        (c) => !c.modifiers || c.modifiers.length < BEVERAGE_REQUIRED_COUNT
+      );
+      return incomplete?.id ?? snapshot[snapshot.length - 1]?.id;
+    };
+
     if (parsed.followUp?.modifierGroupId && MODIFIER_OPTIONS[parsed.followUp.modifierGroupId]) {
       if (!parsed.followUp.options || parsed.followUp.options.length === 0) {
         parsed.followUp.options = MODIFIER_OPTIONS[parsed.followUp.modifierGroupId];
@@ -194,19 +319,118 @@ export async function POST(req: NextRequest) {
     // Only trigger when the message is actually a question (contains "?").
     if (!parsed.followUp && parsed.assistantMessage && parsed.assistantMessage.includes("?")) {
       const msg = parsed.assistantMessage.toLowerCase();
-      const lastCartItem = cartSnapshot?.[cartSnapshot.length - 1];
       let detectedGroup: string | null = null;
       if (msg.includes("what milk") || msg.includes("which milk") || msg.includes("what type of milk") || msg.includes("what kind of milk")) detectedGroup = "milk";
       else if (msg.includes("what size") || msg.includes("which size") || msg.includes("what variation")) detectedGroup = "variations";
       else if (msg.includes("what temperature") || msg.includes("hot or iced") || msg.includes("hot, iced")) detectedGroup = "temperature";
 
-      if (detectedGroup && lastCartItem && MODIFIER_OPTIONS[detectedGroup]) {
-        parsed.followUp = {
-          question: parsed.assistantMessage,
-          options: MODIFIER_OPTIONS[detectedGroup],
-          targetItemId: lastCartItem.id,
-          modifierGroupId: detectedGroup,
-        };
+      if (detectedGroup && cartSnapshot?.length && MODIFIER_OPTIONS[detectedGroup]) {
+        const targetId = resolveFollowUpTarget(parsed.assistantMessage, cartSnapshot);
+        if (targetId) {
+          parsed.followUp = {
+            question: parsed.assistantMessage,
+            options: MODIFIER_OPTIONS[detectedGroup],
+            targetItemId: targetId,
+            modifierGroupId: detectedGroup,
+          };
+        }
+      }
+    }
+
+    // Verify/correct the followUp targetItemId even when the LLM provides one,
+    // since the LLM often sends the wrong cart item id in multi-item orders.
+    if (parsed.followUp && cartSnapshot?.length) {
+      const correctedId = resolveFollowUpTarget(
+        parsed.followUp.question || parsed.assistantMessage,
+        cartSnapshot,
+        parsed.followUp.targetItemId,
+      );
+      if (correctedId) {
+        parsed.followUp.targetItemId = correctedId;
+      }
+    }
+
+    // Post-process actions: fix mismatched action types / item IDs from the LLM.
+    if (parsed.actions?.length && cartSnapshot?.length) {
+      parsed.actions = parsed.actions.map(
+        (a: { type: string; itemId: string; itemName?: string; modifiers?: string[] }) => {
+          if (a.type === "add_item" && a.modifiers?.length) {
+            // LLM sent add_item with modifiers for an item already in the cart →
+            // convert to set_modifier so the existing item is updated in-place.
+            const actionSet = new Set(a.modifiers);
+            const existing = cartSnapshot.find((c) => {
+              if (!c.id.startsWith(`${a.itemId}-`)) return false;
+              const mods = c.modifiers ?? [];
+              if (mods.length === 0) return true;
+              return mods.length <= a.modifiers!.length && mods.every((m) => actionSet.has(m));
+            });
+            if (existing) {
+              return { ...a, type: "set_modifier", itemId: existing.id };
+            }
+          }
+          if (a.type === "set_modifier") {
+            // LLM may have sent the menu-item id instead of the cart-item id.
+            const exactMatch = cartSnapshot.find((c) => c.id === a.itemId);
+            if (!exactMatch) {
+              const prefixMatch = cartSnapshot.find((c) => c.id.startsWith(`${a.itemId}-`));
+              if (prefixMatch) {
+                return { ...a, itemId: prefixMatch.id };
+              }
+            }
+          }
+          return a;
+        }
+      );
+    }
+
+    // ---- Final safety net: don't end the conversation while items are incomplete ----
+    // Build the effective modifier state after this response's actions are applied,
+    // then check if any beverage still needs required modifiers.
+    if (!parsed.followUp) {
+      const effectiveMods = new Map<string, { name: string; mods: string[] }>();
+
+      // Seed from cart snapshot
+      if (cartSnapshot?.length) {
+        for (const c of cartSnapshot) {
+          effectiveMods.set(c.id, { name: c.name, mods: [...(c.modifiers ?? [])] });
+        }
+      }
+
+      // Apply actions from this response
+      for (const action of (parsed.actions ?? []) as Array<{ type: string; itemId: string; itemName?: string; modifiers?: string[] }>) {
+        if (action.type === "add_item") {
+          effectiveMods.set(`__new_${action.itemId}`, {
+            name: action.itemName ?? action.itemId,
+            mods: [...(action.modifiers ?? [])],
+          });
+        } else if (action.type === "set_modifier" && action.modifiers) {
+          const entry = effectiveMods.get(action.itemId);
+          if (entry) {
+            entry.mods = Array.from(new Set([...entry.mods, ...action.modifiers]));
+          }
+        }
+      }
+
+      // Find the first beverage item still missing a required modifier group
+      for (const [id, { name, mods }] of effectiveMods) {
+        const isBeverage = [...BEVERAGE_IDS].some(
+          (bev) => id === bev || id.startsWith(`${bev}-`) || id === `__new_${bev}`
+        );
+        if (!isBeverage) continue;
+
+        const groups = coveredGroups(mods);
+        const missingGroup = REQUIRED_BEVERAGE_GROUPS.find((g) => !groups.has(g));
+        if (missingGroup && MODIFIER_OPTIONS[missingGroup]) {
+          const groupLabel = missingGroup === "variations" ? "size" : missingGroup;
+          parsed.assistantMessage = `What ${groupLabel} would you like for your ${name.toLowerCase()}?`;
+          parsed.followUp = {
+            question: parsed.assistantMessage,
+            options: MODIFIER_OPTIONS[missingGroup],
+            targetItemId: id.startsWith("__new_") ? id.slice(6) : id,
+            modifierGroupId: missingGroup,
+          };
+          break;
+        }
       }
     }
 

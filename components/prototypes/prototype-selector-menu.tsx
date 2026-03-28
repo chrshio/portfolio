@@ -14,7 +14,7 @@ function variantShortLabel(item: PrototypeItem): string {
     qsr: "QSR",
     fsr: "FSR",
     retail: "Retail",
-    voice: "*Vision*",
+    voice: "Voice",
     main: "POS",
     web: "Dashboard",
   };
