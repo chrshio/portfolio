@@ -17,6 +17,8 @@ interface CartSectionProps {
   onPay: () => void;
   editingItemId?: string | null;
   activeComboSlotId?: string | null;
+  /** When set with activeComboSlotId, cart highlights that parent modifier and its nested choices on the active slot. */
+  activeNestedModifierOptionId?: string | null;
   onItemClick?: (id: string) => void;
   onRequirementClick?: (itemId: string, groupId: string) => void;
   onEditCancel?: () => void;
@@ -58,6 +60,7 @@ export function CartSection({
   onPay,
   editingItemId,
   activeComboSlotId,
+  activeNestedModifierOptionId,
   onItemClick,
   onRequirementClick,
   onEditCancel,
@@ -178,6 +181,7 @@ export function CartSection({
                 editingItemId={editingItemId}
                 addingItemId={addingItemId}
                 activeComboSlotId={activeComboSlotId}
+                activeNestedModifierOptionId={activeNestedModifierOptionId}
                 onItemClick={onItemClick}
                 onRequirementClick={onRequirementClick}
                 onRemoveItem={onRemoveItem}
@@ -192,6 +196,7 @@ export function CartSection({
               editingItemId={editingItemId}
               addingItemId={addingItemId}
               activeComboSlotId={activeComboSlotId}
+              activeNestedModifierOptionId={activeNestedModifierOptionId}
               onItemClick={onItemClick}
               onRequirementClick={onRequirementClick}
               onRemoveItem={onRemoveItem}

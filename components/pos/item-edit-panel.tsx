@@ -11,6 +11,9 @@ import {
   isGroupRequirementUnmet,
   computeNewModifiers,
   getVariationOptionPriceDisplay,
+  hasNestedModifiers,
+  findModifierOption,
+  isNestedModifierRequirementUnmet,
 } from "@/lib/modifiers";
 import { ComboSection } from "./combo-section";
 import { cn } from "@/lib/utils";
@@ -90,7 +93,14 @@ function ModifierTile({
   onClick,
   priceDisplay,
   incompleteSurface,
-}: ModifierTileProps) {
+  hasNested,
+  onModify,
+  hasUnmetNested,
+}: ModifierTileProps & {
+  hasNested?: boolean;
+  onModify?: () => void;
+  hasUnmetNested?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
@@ -103,6 +113,18 @@ function ModifierTile({
         <div className="absolute inset-0 rounded-[12px] border-2 border-[#101010] pointer-events-none">
           <div className="absolute inset-0 rounded-[10px] shadow-[inset_0_0_0_2px_white] pointer-events-none" />
         </div>
+      )}
+      {hasNested && isSelected && onModify && (
+        <span
+          role="button"
+          onClick={(e) => { e.stopPropagation(); onModify(); }}
+          className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-medium text-[#101010] shadow-sm active:bg-[#e5e5e5]"
+        >
+          Modify
+          {hasUnmetNested && (
+            <span className="size-2 rounded-full bg-[#007bff] shrink-0" aria-hidden />
+          )}
+        </span>
       )}
       <span className="text-[16px] font-medium text-[#101010] leading-6 truncate">
         {option.name}
@@ -189,6 +211,12 @@ interface ItemEditPanelProps {
   onBackFromSlotModify?: () => void;
   /** When provided, Modify on a combo slot opens the slot-detail view (call with slotId). */
   onModifySlot?: (slotId: string) => void;
+  /** When set, show nested modifier detail view. */
+  editingNestedModifierId?: string | null;
+  onModifyNestedModifier?: (optionId: string) => void;
+  onBackFromNestedModifier?: () => void;
+  draftNestedModifierSelections?: Record<string, string[]>;
+  onNestedModifierSelectionsChange?: (optionId: string, selections: string[]) => void;
   /** FSR seating: available seats. When provided, seat section appears at top. */
   seats?: SeatOption[];
   draftSeatId?: string | null;
@@ -223,6 +251,11 @@ export function ItemEditPanel({
   editingComboSlotId = null,
   onBackFromSlotModify,
   onModifySlot,
+  editingNestedModifierId = null,
+  onModifyNestedModifier,
+  onBackFromNestedModifier,
+  draftNestedModifierSelections = {},
+  onNestedModifierSelectionsChange,
   seats,
   draftSeatId,
   onSeatChange,
@@ -244,15 +277,27 @@ export function ItemEditPanel({
   const isSlotDetail =
     !!(isCombo && editingComboSlotId && activeSlot && activeSlotItem && onComboSelectionsChange);
   const effectiveItem = isSlotDetail ? activeSlotItem : null;
-  const modifierGroups = isSlotDetail
-    ? getModifierGroups(effectiveItem!)
-    : isCombo
-      ? []
-      : getModifierGroups(item);
+
+  const parentItemForNested = isSlotDetail ? activeSlotItem! : item;
+  const nestedParentOption = editingNestedModifierId
+    ? findModifierOption(parentItemForNested, editingNestedModifierId)
+    : undefined;
+  const isNestedModifierDetail =
+    !!(editingNestedModifierId && nestedParentOption && hasNestedModifiers(nestedParentOption) && onNestedModifierSelectionsChange);
+
+  const modifierGroups = isNestedModifierDetail
+    ? nestedParentOption!.nestedGroups!
+    : isSlotDetail
+      ? getModifierGroups(effectiveItem!)
+      : isCombo
+        ? []
+        : getModifierGroups(item);
   const firstModifierGroupId = modifierGroups[0]?.id;
-  const effectiveDraftModifiers = isSlotDetail
-    ? activeSlotSelection?.modifiers ?? []
-    : draftModifiers;
+  const effectiveDraftModifiers = isNestedModifierDetail
+    ? draftNestedModifierSelections[editingNestedModifierId!] ?? []
+    : isSlotDetail
+      ? activeSlotSelection?.modifiers ?? []
+      : draftModifiers;
 
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -279,29 +324,38 @@ export function ItemEditPanel({
     }
   }, []);
 
-  const hasSeatSection = !!(seats && seats.length > 0 && onSeatChange && !isSlotDetail);
+  const hasSeatSection = !!(seats && seats.length > 0 && onSeatChange && !isSlotDetail && !isNestedModifierDetail);
   const seatTab = hasSeatSection
     ? { id: "__seat__", label: "Seat", required: true, alert: !draftSeatId }
     : null;
 
-  const tabs = isCombo && !isSlotDetail
+  const tabs = isNestedModifierDetail
     ? [
-        ...(seatTab ? [seatTab] : []),
-        { id: "items", label: "Items", required: false, alert: false },
-        { id: "note", label: "Note", required: false, alert: false },
-        { id: "options", label: "Options", required: false, alert: false },
-      ]
-    : [
-        ...(seatTab ? [seatTab] : []),
         ...modifierGroups.map((group) => ({
           id: group.id,
           label: group.name,
           required: !!(group.minSelect && group.minSelect > 0),
           alert: isGroupRequirementUnmet(group, effectiveDraftModifiers),
         })),
-        { id: "note", label: "Note", required: false, alert: false },
-        { id: "options", label: "Options", required: false, alert: false },
-      ];
+      ]
+    : isCombo && !isSlotDetail
+      ? [
+          ...(seatTab ? [seatTab] : []),
+          { id: "items", label: "Items", required: false, alert: false },
+          { id: "note", label: "Note", required: false, alert: false },
+          { id: "options", label: "Options", required: false, alert: false },
+        ]
+      : [
+          ...(seatTab ? [seatTab] : []),
+          ...modifierGroups.map((group) => ({
+            id: group.id,
+            label: group.name,
+            required: !!(group.minSelect && group.minSelect > 0),
+            alert: isGroupRequirementUnmet(group, effectiveDraftModifiers),
+          })),
+          { id: "note", label: "Note", required: false, alert: false },
+          { id: "options", label: "Options", required: false, alert: false },
+        ];
 
   // Keep a stable ref to the tabs array so the scroll listener never goes stale.
   const tabsRef = useRef(tabs);
@@ -311,10 +365,14 @@ export function ItemEditPanel({
 
   useEffect(() => {
     const defaultTabId =
-      isCombo && !isSlotDetail ? "items" : (firstModifierGroupId ?? "note");
+      isNestedModifierDetail
+        ? (firstModifierGroupId ?? null)
+        : isCombo && !isSlotDetail
+          ? "items"
+          : (firstModifierGroupId ?? "note");
     setActiveTabId(defaultTabId);
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
-  }, [item.id, isCombo, isSlotDetail, editingComboSlotId, activeSlotItemId, firstModifierGroupId]);
+  }, [item.id, isCombo, isSlotDetail, isNestedModifierDetail, editingComboSlotId, editingNestedModifierId, activeSlotItemId, firstModifierGroupId]);
 
   const effectiveActiveTabId = activeTabId ?? tabs[0]?.id;
 
@@ -355,8 +413,28 @@ export function ItemEditPanel({
   };
 
   const handleModifierSelect = (group: ModifierGroup, optionId: string) => {
+    if (isNestedModifierDetail && editingNestedModifierId && onNestedModifierSelectionsChange) {
+      const currentNested = draftNestedModifierSelections[editingNestedModifierId] ?? [];
+      const nextNested = computeNewModifiers(group, optionId, currentNested);
+      onNestedModifierSelectionsChange(editingNestedModifierId, nextNested);
+      const wasRequiredAndUnmet =
+        group.minSelect && group.minSelect > 0 && isGroupRequirementUnmet(group, currentNested);
+      const nowSatisfied = !isGroupRequirementUnmet(group, nextNested);
+      if (wasRequiredAndUnmet && nowSatisfied) {
+        const nextId = getNextUnmetRequiredGroupId(nextNested);
+        if (nextId) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => scrollToSection(nextId));
+          });
+        }
+      }
+      return;
+    }
     const currentModifiers = isSlotDetail ? effectiveDraftModifiers : draftModifiers;
     const nextModifiers = computeNewModifiers(group, optionId, currentModifiers);
+    const toggledOption = group.options.find((o) => o.id === optionId);
+    const becameSelected =
+      !currentModifiers.includes(optionId) && nextModifiers.includes(optionId);
     if (isSlotDetail && editingComboSlotId && activeSlotItemId && onComboSelectionsChange) {
       onComboSelectionsChange(editingComboSlotId, {
         itemId: activeSlotItemId,
@@ -364,6 +442,14 @@ export function ItemEditPanel({
       });
     } else {
       onModifiersChange(nextModifiers);
+    }
+    if (
+      becameSelected &&
+      toggledOption &&
+      hasNestedModifiers(toggledOption) &&
+      onModifyNestedModifier
+    ) {
+      queueMicrotask(() => onModifyNestedModifier(optionId));
     }
     const wasRequiredAndUnmet =
       group.minSelect &&
@@ -373,7 +459,6 @@ export function ItemEditPanel({
     if (wasRequiredAndUnmet && nowSatisfied) {
       const nextId = getNextUnmetRequiredGroupId(nextModifiers);
       if (nextId) {
-        // Defer until after React commit and layout so refs and positions are correct (e.g. in modal)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => scrollToSection(nextId));
         });
@@ -397,18 +482,52 @@ export function ItemEditPanel({
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white px-6">
       {!hideHeader && (
-      <div className="flex items-center gap-3 pt-4 pb-4 h-[88px]">
-        {isSlotDetail && activeSlotItem ? (
-          <h2 className="min-w-0 flex-1 text-[25px] font-semibold leading-tight truncate">
+      <div className="flex items-center gap-3 pt-4 pb-4 pr-8 h-[88px]">
+        {isNestedModifierDetail && nestedParentOption && isSlotDetail && activeSlotItem ? (
+          <h2 className="min-w-0 flex-1 flex items-baseline text-[25px] font-semibold leading-tight">
+            <span className="flex items-baseline min-w-0 shrink overflow-hidden">
+              <button
+                type="button"
+                onClick={() => onBackFromSlotModify?.()}
+                className="text-[#666] active:opacity-70 truncate"
+              >
+                {item.name}
+              </button>
+              <span className="px-2 text-[#9a9a9a] shrink-0">{">"}</span>
+            </span>
+            <button
+              type="button"
+              onClick={onBackFromNestedModifier}
+              className="text-[#666] active:opacity-70 shrink-0"
+            >
+              {activeSlotItem.name}
+            </button>
+            <span className="px-2 text-[#9a9a9a] shrink-0">{">"}</span>
+            <span className="text-[#101010] shrink-0">{nestedParentOption.name}</span>
+          </h2>
+        ) : isNestedModifierDetail && nestedParentOption ? (
+          <h2 className="min-w-0 flex-1 flex items-baseline text-[25px] font-semibold leading-tight">
+            <button
+              type="button"
+              onClick={onBackFromNestedModifier}
+              className="text-[#666] active:opacity-70 truncate min-w-0 shrink"
+            >
+              {parentItemForNested.name}
+            </button>
+            <span className="px-2 text-[#9a9a9a] shrink-0">{">"}</span>
+            <span className="text-[#101010] shrink-0">{nestedParentOption.name}</span>
+          </h2>
+        ) : isSlotDetail && activeSlotItem ? (
+          <h2 className="min-w-0 flex-1 flex items-baseline text-[25px] font-semibold leading-tight">
             <button
               type="button"
               onClick={onBackFromSlotModify}
-              className="text-[#666] active:opacity-70"
+              className="text-[#666] active:opacity-70 truncate min-w-0 shrink"
             >
               {item.name}
             </button>
-            <span className="px-2 text-[#9a9a9a]">{">"}</span>
-            <span className="text-[#101010]">{activeSlotItem.name}</span>
+            <span className="px-2 text-[#9a9a9a] shrink-0">{">"}</span>
+            <span className="text-[#101010] shrink-0">{activeSlotItem.name}</span>
           </h2>
         ) : (
           <>
@@ -548,6 +667,11 @@ export function ItemEditPanel({
 
               <div className="grid grid-cols-4 gap-2 pb-2">
                 {group.options.map((option, optionIndex) => {
+                  const optionHasNested = hasNestedModifiers(option as ModifierOption);
+                  const optionSelected = effectiveDraftModifiers.includes(option.id);
+                  const hasUnmetNested = optionHasNested && optionSelected
+                    ? isNestedModifierRequirementUnmet(option as ModifierOption, draftNestedModifierSelections[option.id] ?? [])
+                    : false;
                   const priceDisplay =
                     group.id === "variations"
                       ? getVariationOptionPriceDisplay(
@@ -562,12 +686,15 @@ export function ItemEditPanel({
                     <ModifierTile
                       key={option.id}
                       option={option}
-                      isSelected={effectiveDraftModifiers.includes(option.id)}
+                      isSelected={optionSelected}
                       onClick={() => handleModifierSelect(group, option.id)}
                       priceDisplay={priceDisplay}
                       incompleteSurface={
                         incompleteRequirementHighlightActive && requirementUnmet
                       }
+                      hasNested={optionHasNested && !isNestedModifierDetail}
+                      onModify={optionHasNested && onModifyNestedModifier ? () => onModifyNestedModifier(option.id) : undefined}
+                      hasUnmetNested={hasUnmetNested}
                     />
                   );
                 })}
@@ -577,6 +704,7 @@ export function ItemEditPanel({
         })}
 
         {/* Note section */}
+        {!isNestedModifierDetail && (
         <div
           ref={(el) => { sectionRefs.current["note"] = el; }}
           className="pt-2"
@@ -600,8 +728,10 @@ export function ItemEditPanel({
             )}
           />
         </div>
+        )}
 
         {/* Options section */}
+        {!isNestedModifierDetail && (
         <div
           ref={(el) => { sectionRefs.current["options"] = el; }}
           className="pt-2"
@@ -717,6 +847,7 @@ export function ItemEditPanel({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

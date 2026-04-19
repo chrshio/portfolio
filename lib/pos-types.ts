@@ -82,6 +82,8 @@ export interface ComboDefinition {
 export interface ComboSlotSelection {
   itemId: string;
   modifiers?: string[];
+  /** Nested modifier selections: parent option id -> selected nested option ids. */
+  nestedModifierSelections?: Record<string, string[]>;
 }
 
 export interface CartItem {
@@ -91,6 +93,8 @@ export interface CartItem {
   quantity: number;
   description?: string;
   modifiers?: string[];
+  /** Nested modifier selections: parent option id -> selected nested option ids. */
+  nestedModifierSelections?: Record<string, string[]>;
   /** Combo meal slot selections: slotId -> { itemId, modifiers }. */
   comboSelections?: Record<string, ComboSlotSelection>;
   /** Original menu item id (e.g. tenders-meal); used to look up combo definition when editing. */

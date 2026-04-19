@@ -8,6 +8,7 @@ import {
   isGroupRequirementUnmet,
   getModifierPriceDelta,
   getModifierDisplay,
+  hasNestedModifiers,
 } from "@/lib/modifiers";
 import { FULFILLMENT_METHODS, DISCOUNT_OPTIONS } from "./item-edit-panel";
 
@@ -16,6 +17,7 @@ interface CartItemsProps {
   editingItemId?: string | null;
   addingItemId?: string | null;
   activeComboSlotId?: string | null;
+  activeNestedModifierOptionId?: string | null;
   onItemClick?: (id: string) => void;
   onRequirementClick?: (itemId: string, groupId: string) => void;
   onRemoveItem?: (id: string) => void;
@@ -35,6 +37,7 @@ function CartItemRow({
   isDraft,
   isFaded,
   activeComboSlotId,
+  activeNestedModifierOptionId,
   onItemClick,
   onRequirementClick,
   onRemove,
@@ -47,6 +50,7 @@ function CartItemRow({
   isDraft: boolean;
   isFaded: boolean;
   activeComboSlotId?: string | null;
+  activeNestedModifierOptionId?: string | null;
   onItemClick?: (id: string) => void;
   onRequirementClick?: (itemId: string, groupId: string) => void;
   onRemove?: () => void;
@@ -208,11 +212,12 @@ function CartItemRow({
         >
         {(() => {
           const unitPrice =
-            item.price + getModifierPriceDelta(item, item.modifiers ?? []);
+            item.price + getModifierPriceDelta(item, item.modifiers ?? [], item.nestedModifierSelections);
           const totalPrice = unitPrice * item.quantity;
           const { variantName, modifierNames } = getModifierDisplay(
             item,
-            item.modifiers ?? []
+            item.modifiers ?? [],
+            item.nestedModifierSelections
           );
           const hasDiscount = (item.discounts?.length ?? 0) > 0;
           const appliedDiscounts =
@@ -260,6 +265,11 @@ function CartItemRow({
                   if (selectionEntries.length === 0) return null;
 
                   const editingSlot = !!activeComboSlotId;
+                  const nestedModifierCartFocus =
+                    !!(isEditing || isDraft) &&
+                    !isFaded &&
+                    editingSlot &&
+                    !!activeNestedModifierOptionId;
 
                   if (!editingSlot) {
                     const parts = selectionEntries.map(([, sel]) => {
@@ -267,7 +277,7 @@ function CartItemRow({
                       const slotName = slotItem?.name ?? sel.itemId;
                       const slotModifiers = sel.modifiers ?? [];
                       const slotDetails = slotItem
-                        ? getModifierDisplay(slotItem, slotModifiers)
+                        ? getModifierDisplay(slotItem, slotModifiers, sel.nestedModifierSelections)
                         : { variantName: undefined, modifierNames: [] as string[] };
                       const subParts = [
                         ...(slotDetails.variantName ? [slotDetails.variantName] : []),
@@ -288,15 +298,44 @@ function CartItemRow({
                         const slotItem = getMenuItemById!(sel.itemId);
                         const slotName = slotItem?.name ?? sel.itemId;
                         const slotModifiers = sel.modifiers ?? [];
+                        const nestedSels = sel.nestedModifierSelections ?? {};
                         const slotDetails = slotItem
                           ? getModifierDisplay(slotItem, slotModifiers)
                           : { variantName: undefined, modifierNames: [] as string[] };
-                        const slotSubLines = [
-                          ...(slotDetails.variantName ? [slotDetails.variantName] : []),
-                          ...slotDetails.modifierNames,
-                        ];
                         const isActiveSlot = slotId === activeComboSlotId;
                         const isInactiveWhileEditing = !isActiveSlot;
+                        const nestedFocusOnThisSlot =
+                          nestedModifierCartFocus && isActiveSlot;
+
+                        const modifierLines: { label: string; optionId?: string; nestedLabels: string[] }[] = [];
+                        if (slotDetails.variantName) {
+                          modifierLines.push({ label: slotDetails.variantName, nestedLabels: [] });
+                        }
+                        if (slotItem) {
+                          const groups = getModifierGroups(slotItem);
+                          for (const modName of slotDetails.modifierNames) {
+                            let optionId: string | undefined;
+                            const nestedLabels: string[] = [];
+                            for (const g of groups) {
+                              for (const opt of g.options) {
+                                if (opt.name === modName && slotModifiers.includes(opt.id)) {
+                                  optionId = opt.id;
+                                  if (hasNestedModifiers(opt)) {
+                                    const ids = nestedSels[opt.id] ?? [];
+                                    for (const ng of opt.nestedGroups!) {
+                                      for (const no of ng.options) {
+                                        if (ids.includes(no.id)) nestedLabels.push(no.name);
+                                      }
+                                    }
+                                  }
+                                  break;
+                                }
+                              }
+                              if (optionId) break;
+                            }
+                            modifierLines.push({ label: modName, optionId, nestedLabels });
+                          }
+                        }
 
                         return (
                           <div key={slotId} className="w-full">
@@ -305,24 +344,55 @@ function CartItemRow({
                                 "text-[14px] leading-[18px] w-full",
                                 isInactiveWhileEditing
                                   ? "text-[#9b9b9b]"
-                                  : "text-[#101010]"
+                                  : nestedFocusOnThisSlot
+                                    ? "text-[#9b9b9b]"
+                                    : "text-[#101010]"
                               )}
                             >
                               {slotName}
                             </p>
-                            {slotSubLines.map((line) => (
-                              <p
-                                key={`${slotId}-${line}`}
-                                className={cn(
-                                  "text-[14px] leading-[18px] w-full pl-4",
-                                  isInactiveWhileEditing
-                                    ? "text-[#b3b3b3]"
-                                    : "text-[#101010]"
-                                )}
-                              >
-                                {line}
-                              </p>
-                            ))}
+                            {modifierLines.map((line, lineIdx) => {
+                              const isVariantLine = lineIdx === 0 && !!slotDetails.variantName;
+                              const isFocusedModifierLine =
+                                nestedFocusOnThisSlot &&
+                                !isVariantLine &&
+                                line.optionId === activeNestedModifierOptionId;
+                              const lineMutedNestedContext =
+                                nestedFocusOnThisSlot && !isVariantLine && !isFocusedModifierLine;
+                              const variantMuted = nestedFocusOnThisSlot && isVariantLine;
+
+                              return (
+                              <div key={`${slotId}-${line.label}-${lineIdx}`}>
+                                <p
+                                  className={cn(
+                                    "text-[14px] leading-[18px] w-full pl-4",
+                                    isInactiveWhileEditing
+                                      ? "text-[#b3b3b3]"
+                                      : variantMuted || lineMutedNestedContext
+                                        ? "text-[#9b9b9b]"
+                                        : "text-[#101010]"
+                                  )}
+                                >
+                                  {line.label}
+                                </p>
+                                {line.nestedLabels.map((nested) => (
+                                  <p
+                                    key={`${slotId}-${line.label}-${nested}`}
+                                    className={cn(
+                                      "text-[14px] leading-[18px] w-full pl-8",
+                                      isInactiveWhileEditing
+                                        ? "text-[#b3b3b3]"
+                                        : isFocusedModifierLine
+                                          ? "text-[#101010]"
+                                          : "text-[#9b9b9b]"
+                                    )}
+                                  >
+                                    {nested}
+                                  </p>
+                                ))}
+                              </div>
+                            );
+                            })}
                           </div>
                         );
                       })}
@@ -337,7 +407,7 @@ function CartItemRow({
                 </p>
               )}
 
-              {/* Modifiers (milk, temperature, add-ons) — comma-separated */}
+              {/* Modifiers (milk, temperature, add-ons) — comma-separated, with nested sub-lines */}
               {modifierNames.length > 0 && (
                 <p className="text-[14px] leading-5 text-[#666] w-full">
                   {modifierNames.join(", ")}
@@ -543,6 +613,7 @@ export function CartItems({
   editingItemId,
   addingItemId,
   activeComboSlotId,
+  activeNestedModifierOptionId,
   onItemClick,
   onRequirementClick,
   onRemoveItem,
@@ -574,6 +645,7 @@ export function CartItems({
                 isDraft={isDraft}
                 isFaded={isFaded}
                 activeComboSlotId={activeComboSlotId}
+                activeNestedModifierOptionId={activeNestedModifierOptionId}
                 onItemClick={!isDraft && onItemClick ? onItemClick : undefined}
                 onRequirementClick={onRequirementClick}
                 onRemove={!isDraft && onRemoveItem ? () => onRemoveItem(item.id) : undefined}

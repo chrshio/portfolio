@@ -4,6 +4,8 @@ export interface ModifierOption {
   id: string;
   name: string;
   price?: number;
+  /** When set, selecting this option allows drilling into a nested modifier detail view. */
+  nestedGroups?: ModifierGroup[];
 }
 
 export interface ModifierGroup {
@@ -125,9 +127,36 @@ export const NASHVILLE_SANDWICH_MODIFIER_GROUPS: ModifierGroup[] = [
   },
 ];
 
-/** Chicken and Waffles (QSR): spice level required only. */
+/** Chicken and Waffles (QSR): spice level required + extras with nested egg preparation. */
 export const CHICKEN_AND_WAFFLES_MODIFIER_GROUPS: ModifierGroup[] = [
   SPICE_LEVEL_MODIFIER_GROUP,
+  {
+    id: "extras-cw",
+    name: "Extras",
+    options: [
+      {
+        id: "add-egg",
+        name: "Add Egg",
+        price: 2,
+        nestedGroups: [
+          {
+            id: "egg-preparation",
+            name: "Preparation",
+            minSelect: 1,
+            maxSelect: 1,
+            options: [
+              { id: "egg-fried", name: "Fried" },
+              { id: "egg-sunny-side-up", name: "Sunny Side Up" },
+              { id: "egg-scrambled", name: "Scrambled" },
+              { id: "egg-poached", name: "Poached" },
+            ],
+          },
+        ],
+      },
+      { id: "extra-syrup", name: "Extra Syrup", price: 1 },
+      { id: "whipped-cream", name: "Whipped Cream", price: 1 },
+    ],
+  },
 ];
 
 /** Tenders individual items (QSR): spice level required only. */
@@ -155,7 +184,25 @@ export const SMASH_BURGER_MODIFIER_GROUPS: ModifierGroup[] = [
     name: "Build Your Burger",
     options: [
       { id: "extra-smash-patty", name: "Extra Smash Patty", price: 2.99 },
-      { id: "extra-cheese", name: "Extra Cheese", price: 0.49 },
+      {
+        id: "extra-cheese",
+        name: "Extra Cheese",
+        price: 0.49,
+        nestedGroups: [
+          {
+            id: "cheese-type",
+            name: "Cheese Type",
+            minSelect: 1,
+            maxSelect: 1,
+            options: [
+              { id: "cheese-american", name: "American" },
+              { id: "cheese-cheddar", name: "Cheddar" },
+              { id: "cheese-pepper-jack", name: "Pepper Jack" },
+              { id: "cheese-swiss", name: "Swiss" },
+            ],
+          },
+        ],
+      },
       { id: "extra-pickles", name: "Extra Pickles", price: 0.49 },
       { id: "extra-griddled-onions", name: "Extra Griddled Onions", price: 0.49 },
       { id: "extra-jalapenos", name: "Extra Jalapeños", price: 0.49 },
@@ -254,10 +301,11 @@ export function getDefaultModifiers(item: { name: string }): string[] {
     .map((g) => g.options[0].id);
 }
 
-/** Extra price from selected modifiers (variation deltas + add-on prices). */
+/** Extra price from selected modifiers (variation deltas + add-on prices), including nested modifier prices. */
 export function getModifierPriceDelta(
   item: { name: string },
-  modifierIds: string[]
+  modifierIds: string[],
+  nestedModifierSelections?: Record<string, string[]>
 ): number {
   const groups = getModifierGroups(item);
   let delta = 0;
@@ -265,6 +313,15 @@ export function getModifierPriceDelta(
     for (const group of groups) {
       const option = group.options.find((o) => o.id === id);
       if (option?.price != null) delta += option.price;
+      if (option && hasNestedModifiers(option) && nestedModifierSelections) {
+        const nestedIds = nestedModifierSelections[option.id] ?? [];
+        for (const nid of nestedIds) {
+          for (const ng of option.nestedGroups!) {
+            const no = ng.options.find((o) => o.id === nid);
+            if (no?.price != null) delta += no.price;
+          }
+        }
+      }
     }
   }
   return delta;
@@ -282,10 +339,58 @@ export function getVariationOptionPriceDisplay(
   return `+$${option.price.toFixed(2)}`;
 }
 
+/** Returns true if the given modifier option has nested modifier groups. */
+export function hasNestedModifiers(option: ModifierOption): boolean {
+  return !!(option.nestedGroups && option.nestedGroups.length > 0);
+}
+
+/** Find a modifier option by id across all groups for the given item. */
+export function findModifierOption(
+  item: { name: string },
+  optionId: string
+): ModifierOption | undefined {
+  const groups = getModifierGroups(item);
+  for (const group of groups) {
+    const option = group.options.find((o) => o.id === optionId);
+    if (option) return option;
+  }
+  return undefined;
+}
+
+/** Returns true if a selected option with nested groups has unmet required nested selections. */
+export function isNestedModifierRequirementUnmet(
+  option: ModifierOption,
+  nestedSelections: string[]
+): boolean {
+  if (!option.nestedGroups) return false;
+  return option.nestedGroups.some(
+    (g) => g.minSelect && g.minSelect > 0 && isGroupRequirementUnmet(g, nestedSelections)
+  );
+}
+
+/** Check all selected modifiers for unmet nested requirements. */
+export function hasAnyUnmetNestedModifiers(
+  item: { name: string },
+  selectedModifiers: string[],
+  nestedModifierSelections: Record<string, string[]>
+): boolean {
+  const groups = getModifierGroups(item);
+  for (const group of groups) {
+    for (const option of group.options) {
+      if (!selectedModifiers.includes(option.id)) continue;
+      if (!hasNestedModifiers(option)) continue;
+      const nested = nestedModifierSelections[option.id] ?? [];
+      if (isNestedModifierRequirementUnmet(option, nested)) return true;
+    }
+  }
+  return false;
+}
+
 /** Resolve modifier ids to display: variant (variations group) and comma-separated other modifier names. */
 export function getModifierDisplay(
   item: { name: string },
-  modifierIds: string[]
+  modifierIds: string[],
+  nestedModifierSelections?: Record<string, string[]>
 ): { variantName: string | null; modifierNames: string[] } {
   const groups = getModifierGroups(item);
   let variantName: string | null = null;
@@ -294,10 +399,28 @@ export function getModifierDisplay(
     for (const group of groups) {
       const option = group.options.find((o) => o.id === id);
       if (!option) continue;
+      let label = option.name;
+      if (hasNestedModifiers(option) && nestedModifierSelections) {
+        const nestedIds = nestedModifierSelections[option.id] ?? [];
+        if (nestedIds.length > 0) {
+          const nestedNames = nestedIds
+            .map((nid) => {
+              for (const ng of option.nestedGroups!) {
+                const no = ng.options.find((o) => o.id === nid);
+                if (no) return no.name;
+              }
+              return null;
+            })
+            .filter(Boolean);
+          if (nestedNames.length > 0) {
+            label = `${option.name} (${nestedNames.join(", ")})`;
+          }
+        }
+      }
       if (group.id === "variations") {
-        variantName = option.name;
+        variantName = label;
       } else {
-        modifierNames.push(option.name);
+        modifierNames.push(label);
       }
       break;
     }

@@ -65,11 +65,14 @@ function getSlotsWithUnmetModifierRequirements(
 
 export function POSScreenQSR() {
   const [activeTab, setActiveTab] = useState<NavItem>("checkout");
-  const cloneSelection = (selection?: { itemId: string; modifiers?: string[] }) =>
+  const cloneSelection = (selection?: ComboSlotSelection) =>
     selection
       ? {
           ...selection,
           modifiers: selection.modifiers ? [...selection.modifiers] : undefined,
+          nestedModifierSelections: selection.nestedModifierSelections
+            ? Object.fromEntries(Object.entries(selection.nestedModifierSelections).map(([k, v]) => [k, [...v]]))
+            : undefined,
         }
       : undefined;
 
@@ -97,19 +100,25 @@ export function POSScreenQSR() {
     discounts: [],
     serviceCharges: [],
   });
-  const [addDraftComboSelections, setAddDraftComboSelections] = useState<Record<string, { itemId: string; modifiers?: string[] }>>({});
+  const [addDraftComboSelections, setAddDraftComboSelections] = useState<Record<string, ComboSlotSelection>>({});
 
   // Toast + scroll signal for the add panel validation.
   const [addToastMessage, setAddToastMessage] = useState<string | null>(null);
   const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
   const [addScrollSignal, setAddScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
   const [editScrollSignal, setEditScrollSignal] = useState<{ groupId: string; nonce: number } | null>(null);
-  const [editDraftComboSelections, setEditDraftComboSelections] = useState<Record<string, { itemId: string; modifiers?: string[] }>>({});
+  const [editDraftComboSelections, setEditDraftComboSelections] = useState<Record<string, ComboSlotSelection>>({});
+  /** Nested modifier selections for the add flow: parent option id -> selected nested option ids. */
+  const [addDraftNestedModifierSelections, setAddDraftNestedModifierSelections] = useState<Record<string, string[]>>({});
+  /** Nested modifier selections for the edit flow. */
+  const [editDraftNestedModifierSelections, setEditDraftNestedModifierSelections] = useState<Record<string, string[]>>({});
   const [orderFulfillment, setOrderFulfillment] = useState("for-here");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
   /** When set, left panel shows slot-detail view (combo name > slot item) for this slot. */
   const [editingComboSlotId, setEditingComboSlotId] = useState<string | null>(null);
-  const addSlotSelectionSnapshotRef = useRef<Record<string, { itemId: string; modifiers?: string[] } | undefined>>({});
+  /** When set, left panel shows nested modifier detail (item/slot > option) for this modifier option. */
+  const [editingNestedModifierId, setEditingNestedModifierId] = useState<string | null>(null);
+  const addSlotSelectionSnapshotRef = useRef<Record<string, ComboSlotSelection | undefined>>({});
 
   /** After category onboarding, slots that need modifier selection (e.g. spice level); we auto-open slot detail for each. */
   const [addPendingModifierSlotQueue, setAddPendingModifierSlotQueue] = useState<string[]>([]);
@@ -211,6 +220,9 @@ export function POSScreenQSR() {
         quantity: addDraftQuantity,
         description: addingItem.description,
         modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+        ...(Object.keys(addDraftNestedModifierSelections).length > 0
+          ? { nestedModifierSelections: addDraftNestedModifierSelections }
+          : {}),
         ...(addComboDef && Object.keys(addDraftComboSelections).length > 0
           ? { comboSelections: addDraftComboSelections, menuItemId: addingItem.id }
           : {}),
@@ -225,6 +237,9 @@ export function POSScreenQSR() {
           ...base,
           quantity: draftQuantity,
           modifiers: draftModifiers.length ? draftModifiers : undefined,
+          ...(Object.keys(editDraftNestedModifierSelections).length > 0
+            ? { nestedModifierSelections: editDraftNestedModifierSelections }
+            : {}),
           ...(base.menuItemId != null && Object.keys(editDraftComboSelections).length > 0
             ? { comboSelections: editDraftComboSelections }
             : {}),
@@ -246,7 +261,7 @@ export function POSScreenQSR() {
   const subtotal = displayItems.reduce(
     (sum, item) =>
       sum +
-      (item.price + getModifierPriceDelta(item, item.modifiers ?? [])) *
+      (item.price + getModifierPriceDelta(item, item.modifiers ?? [], item.nestedModifierSelections)) *
         item.quantity,
     0
   );
@@ -262,6 +277,8 @@ export function POSScreenQSR() {
       setAddDraftOptions({ note: "", fulfillmentMethod: "for-here", taxes: [], discounts: [], serviceCharges: [] });
       const defaults = comboDef ? getDefaultComboSelections(comboDef) : {};
       setAddDraftComboSelections({ ...defaults, ...preSelections });
+      setAddDraftNestedModifierSelections({});
+      setEditingNestedModifierId(null);
     },
     []
   );
@@ -367,6 +384,9 @@ export function POSScreenQSR() {
         quantity: addDraftQuantity,
         description: addingItem.description,
         modifiers: addDraftModifiers.length ? addDraftModifiers : undefined,
+        ...(Object.keys(addDraftNestedModifierSelections).length > 0
+          ? { nestedModifierSelections: addDraftNestedModifierSelections }
+          : {}),
         ...(comboDef && Object.keys(addDraftComboSelections).length > 0
           ? { comboSelections: addDraftComboSelections, menuItemId: addingItem.id }
           : {}),
@@ -379,14 +399,17 @@ export function POSScreenQSR() {
     ]);
     setAddingItem(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setAddPendingModifierSlotQueue([]);
     addSlotSelectionSnapshotRef.current = {};
-  }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, addDraftComboSelections]);
+  }, [addingItem, addDraftQuantity, addDraftModifiers, addDraftOptions, addDraftComboSelections, addDraftNestedModifierSelections]);
 
   const handleAddCancel = useCallback(() => {
     setAddingItem(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setAddDraftComboSelections({});
+    setAddDraftNestedModifierSelections({});
     setAddPendingModifierSlotQueue([]);
     setAddToastMessage(null);
     setAddScrollSignal(null);
@@ -397,7 +420,7 @@ export function POSScreenQSR() {
     handleAddConfirm();
   }, [handleAddConfirm]);
 
-  const handleAddSlotDone = useCallback(() => {
+  const exitAddSlotDetailCore = useCallback(() => {
     if (editingComboSlotId) delete addSlotSelectionSnapshotRef.current[editingComboSlotId];
     setAddPendingModifierSlotQueue((prev) => {
       const next = prev.filter((id) => id !== editingComboSlotId);
@@ -410,7 +433,26 @@ export function POSScreenQSR() {
     });
   }, [editingComboSlotId]);
 
+  /** Cart/footer Done: leave nested detail first; only then advance slot / return to meal. */
+  const handleAddSlotDone = useCallback(() => {
+    if (editingNestedModifierId) {
+      setEditingNestedModifierId(null);
+      return;
+    }
+    exitAddSlotDetailCore();
+  }, [editingNestedModifierId, exitAddSlotDetailCore]);
+
+  /** Breadcrumb: leave slot view (and nested if any) in one step. */
+  const handleAddBackFromSlotModify = useCallback(() => {
+    setEditingNestedModifierId(null);
+    exitAddSlotDetailCore();
+  }, [exitAddSlotDetailCore]);
+
   const handleAddSlotCancel = useCallback(() => {
+    if (editingNestedModifierId) {
+      setEditingNestedModifierId(null);
+      return;
+    }
     if (!editingComboSlotId) return;
     const snapshot = addSlotSelectionSnapshotRef.current[editingComboSlotId];
     setAddDraftComboSelections((prev) => {
@@ -426,7 +468,7 @@ export function POSScreenQSR() {
     });
     delete addSlotSelectionSnapshotRef.current[editingComboSlotId];
     setEditingComboSlotId(null);
-  }, [editingComboSlotId]);
+  }, [editingComboSlotId, editingNestedModifierId]);
 
   const handleItemClick = useCallback(
     (id: string) => {
@@ -439,6 +481,9 @@ export function POSScreenQSR() {
                   ...ci,
                   quantity: draftQuantity,
                   modifiers: draftModifiers,
+                  ...(Object.keys(editDraftNestedModifierSelections).length > 0
+                    ? { nestedModifierSelections: editDraftNestedModifierSelections }
+                    : {}),
                   ...(ci.menuItemId != null && Object.keys(editDraftComboSelections).length > 0
                     ? { comboSelections: editDraftComboSelections, menuItemId: ci.menuItemId }
                     : {}),
@@ -455,6 +500,7 @@ export function POSScreenQSR() {
           setUpdateToastMessage(`${prevItem.name} updated.`);
         }
         setEditingComboSlotId(null);
+        setEditingNestedModifierId(null);
         setEditDraftComboSelections({});
       }
 
@@ -494,8 +540,10 @@ export function POSScreenQSR() {
       setAddScrollSignal(null);
       setEditingItemId(id);
       setEditScrollSignal(null);
+      setEditingNestedModifierId(null);
       setDraftQuantity(item.quantity);
       setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
+      setEditDraftNestedModifierSelections(item.nestedModifierSelections ?? {});
       setDraftOptions({
         note: item.note ?? "",
         fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
@@ -558,8 +606,10 @@ export function POSScreenQSR() {
       setAddScrollSignal(null);
       if (editingItemId !== itemId) {
         setEditingItemId(itemId);
+        setEditingNestedModifierId(null);
         setDraftQuantity(item.quantity);
         setDraftModifiers(item.modifiers?.length ? item.modifiers : getDefaultModifiers(item));
+        setEditDraftNestedModifierSelections(item.nestedModifierSelections ?? {});
         setDraftOptions({
           note: item.note ?? "",
           fulfillmentMethod: item.fulfillmentMethod ?? "for-here",
@@ -593,12 +643,21 @@ export function POSScreenQSR() {
   );
 
   const handleEditCancel = useCallback(() => {
+    if (editingNestedModifierId) {
+      setEditingNestedModifierId(null);
+      return;
+    }
     setEditingItemId(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setEditScrollSignal(null);
-  }, []);
+  }, [editingNestedModifierId]);
 
   const handleEditDone = useCallback(() => {
+    if (editingNestedModifierId) {
+      setEditingNestedModifierId(null);
+      return;
+    }
     setCartItems((prev) =>
       prev.map((item) =>
         item.id === editingItemId
@@ -606,6 +665,9 @@ export function POSScreenQSR() {
               ...item,
               quantity: draftQuantity,
               modifiers: draftModifiers,
+              ...(Object.keys(editDraftNestedModifierSelections).length > 0
+                ? { nestedModifierSelections: editDraftNestedModifierSelections }
+                : {}),
               ...(item.menuItemId != null && Object.keys(editDraftComboSelections).length > 0
                 ? { comboSelections: editDraftComboSelections, menuItemId: item.menuItemId }
                 : {}),
@@ -620,8 +682,9 @@ export function POSScreenQSR() {
     );
     setEditingItemId(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setEditScrollSignal(null);
-  }, [editingItemId, draftQuantity, draftModifiers, draftOptions, editDraftComboSelections]);
+  }, [editingItemId, editingNestedModifierId, draftQuantity, draftModifiers, draftOptions, editDraftComboSelections, editDraftNestedModifierSelections]);
 
   const handleModifiersChange = useCallback((modifiers: string[]) => {
     setDraftModifiers(modifiers);
@@ -639,6 +702,7 @@ export function POSScreenQSR() {
     setCartItems((prev) => prev.filter((item) => item.id !== editingItemId));
     setEditingItemId(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setEditScrollSignal(null);
   }, [editingItemId]);
 
@@ -647,6 +711,7 @@ export function POSScreenQSR() {
     if (editingItemId === id) {
       setEditingItemId(null);
       setEditingComboSlotId(null);
+      setEditingNestedModifierId(null);
     }
   }, [editingItemId]);
 
@@ -654,6 +719,7 @@ export function POSScreenQSR() {
     setCartItems([]);
     setEditingItemId(null);
     setEditingComboSlotId(null);
+    setEditingNestedModifierId(null);
     setAddingItem(null);
   }, []);
 
@@ -710,8 +776,39 @@ export function POSScreenQSR() {
                   getCategoryItems={getCategoryItems}
                   getMenuItemById={getMenuItemByIdResolved}
                   editingComboSlotId={editingComboSlotId}
-                  onBackFromSlotModify={() => setEditingComboSlotId(null)}
-                  onModifySlot={(slotId) => setEditingComboSlotId(slotId)}
+                  onBackFromSlotModify={() => {
+                    setEditingNestedModifierId(null);
+                    setEditingComboSlotId(null);
+                  }}
+                  onModifySlot={(slotId) => { setEditingComboSlotId(slotId); setEditingNestedModifierId(null); }}
+                  editingNestedModifierId={editingNestedModifierId}
+                  onModifyNestedModifier={(optionId) => setEditingNestedModifierId(optionId)}
+                  onBackFromNestedModifier={() => setEditingNestedModifierId(null)}
+                  draftNestedModifierSelections={
+                    editingComboSlotId
+                      ? editDraftComboSelections[editingComboSlotId]?.nestedModifierSelections ?? {}
+                      : editDraftNestedModifierSelections
+                  }
+                  onNestedModifierSelectionsChange={(optionId, selections) => {
+                    if (editingComboSlotId) {
+                      setEditDraftComboSelections((prev) => {
+                        const existing = prev[editingComboSlotId];
+                        if (!existing) return prev;
+                        return {
+                          ...prev,
+                          [editingComboSlotId]: {
+                            ...existing,
+                            nestedModifierSelections: {
+                              ...(existing.nestedModifierSelections ?? {}),
+                              [optionId]: selections,
+                            },
+                          },
+                        };
+                      });
+                    } else {
+                      setEditDraftNestedModifierSelections((prev) => ({ ...prev, [optionId]: selections }));
+                    }
+                  }}
                 />
               ) : addingItem ? (
             <ItemAddPanel
@@ -732,10 +829,39 @@ export function POSScreenQSR() {
               getCategoryItems={getCategoryItems}
               getMenuItemById={getMenuItemByIdResolved}
               editingComboSlotId={editingComboSlotId}
-              onBackFromSlotModify={handleAddSlotDone}
+              onBackFromSlotModify={handleAddBackFromSlotModify}
               onModifySlot={(slotId) => {
                 addSlotSelectionSnapshotRef.current[slotId] = cloneSelection(addDraftComboSelections[slotId]);
                 setEditingComboSlotId(slotId);
+                setEditingNestedModifierId(null);
+              }}
+              editingNestedModifierId={editingNestedModifierId}
+              onModifyNestedModifier={(optionId) => setEditingNestedModifierId(optionId)}
+              onBackFromNestedModifier={() => setEditingNestedModifierId(null)}
+              draftNestedModifierSelections={
+                editingComboSlotId
+                  ? addDraftComboSelections[editingComboSlotId]?.nestedModifierSelections ?? {}
+                  : addDraftNestedModifierSelections
+              }
+              onNestedModifierSelectionsChange={(optionId, selections) => {
+                if (editingComboSlotId) {
+                  setAddDraftComboSelections((prev) => {
+                    const existing = prev[editingComboSlotId];
+                    if (!existing) return prev;
+                    return {
+                      ...prev,
+                      [editingComboSlotId]: {
+                        ...existing,
+                        nestedModifierSelections: {
+                          ...(existing.nestedModifierSelections ?? {}),
+                          [optionId]: selections,
+                        },
+                      },
+                    };
+                  });
+                } else {
+                  setAddDraftNestedModifierSelections((prev) => ({ ...prev, [optionId]: selections }));
+                }
               }}
             />
           ) : (
@@ -758,6 +884,7 @@ export function POSScreenQSR() {
                 onPay={handlePay}
                 editingItemId={editingItemId}
                 activeComboSlotId={editingComboSlotId}
+                activeNestedModifierOptionId={editingNestedModifierId}
                 onItemClick={handleItemClick}
                 onRequirementClick={handleRequirementClick}
                 onEditCancel={handleEditCancel}

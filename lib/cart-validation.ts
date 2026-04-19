@@ -1,5 +1,5 @@
 import type { CartItem, MenuItem, ComboDefinition } from "@/lib/pos-types";
-import { getModifierGroups, isGroupRequirementUnmet } from "@/lib/modifiers";
+import { getModifierGroups, isGroupRequirementUnmet, hasAnyUnmetNestedModifiers } from "@/lib/modifiers";
 
 export interface CartValidationOptions {
   getComboDefinition?: (menuItemId: string) => ComboDefinition | null;
@@ -18,6 +18,9 @@ export function cartItemHasIncompleteRequirements(
     isGroupRequirementUnmet(g, item.modifiers ?? [])
   );
   if (unmetGroups.length > 0) return true;
+
+  if (hasAnyUnmetNestedModifiers(item, item.modifiers ?? [], item.nestedModifierSelections ?? {}))
+    return true;
 
   if (seatingEnabled && !item.seatId) return true;
 
@@ -44,6 +47,8 @@ export function cartItemHasIncompleteRequirements(
         for (const group of groups) {
           if (isGroupRequirementUnmet(group, sel.modifiers ?? [])) return true;
         }
+        if (hasAnyUnmetNestedModifiers(menuItem, sel.modifiers ?? [], sel.nestedModifierSelections ?? {}))
+          return true;
       }
     }
   }
