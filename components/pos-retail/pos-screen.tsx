@@ -78,6 +78,8 @@ export function POSScreenRetail({
 
   const [cartCustomer, setCartCustomer] = useState<Customer | null>(null);
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+  /** After picking a customer from add-customer, reopen fulfillment details instead of staying on cart. */
+  const addCustomerOpenedFromFulfillmentDetailsRef = useRef(false);
 
   const [orderFulfillment, setOrderFulfillment] = useState<string>("in-store");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
@@ -102,6 +104,21 @@ export function POSScreenRetail({
       setFulfillmentModalOpen(true);
     }
   }, [orderFulfillment]);
+
+  const handleAddCustomerSelect = useCallback((customer: Customer) => {
+    setCartCustomer(customer);
+    if (addCustomerOpenedFromFulfillmentDetailsRef.current) {
+      setFulfillmentDetailsModalOpen(true);
+    }
+    addCustomerOpenedFromFulfillmentDetailsRef.current = false;
+  }, []);
+
+  const handleAddCustomerModalOpenChange = useCallback((open: boolean) => {
+    setAddCustomerModalOpen(open);
+    if (!open) {
+      addCustomerOpenedFromFulfillmentDetailsRef.current = false;
+    }
+  }, []);
 
   const retailFulfillmentSummaryText = useMemo(
     () =>
@@ -522,7 +539,10 @@ export function POSScreenRetail({
                 accessories={
                   <CartAccessoryCustomer
                     customer={cartCustomer}
-                    onAddCustomer={() => setAddCustomerModalOpen(true)}
+                    onAddCustomer={() => {
+                      addCustomerOpenedFromFulfillmentDetailsRef.current = false;
+                      setAddCustomerModalOpen(true);
+                    }}
                   />
                 }
                 orderFulfillmentLabel={
@@ -574,8 +594,8 @@ export function POSScreenRetail({
 
       <AddCustomerModal
         open={addCustomerModalOpen}
-        onOpenChange={setAddCustomerModalOpen}
-        onSelectCustomer={setCartCustomer}
+        onOpenChange={handleAddCustomerModalOpenChange}
+        onSelectCustomer={handleAddCustomerSelect}
       />
 
       <FulfillmentMethodModal
@@ -596,6 +616,7 @@ export function POSScreenRetail({
         details={fulfillmentDetails}
         onSave={setFulfillmentDetails}
         onOpenAddCustomer={() => {
+          addCustomerOpenedFromFulfillmentDetailsRef.current = true;
           setFulfillmentDetailsModalOpen(false);
           setAddCustomerModalOpen(true);
         }}
