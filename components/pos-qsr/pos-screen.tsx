@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { AlertCircle, CheckCircle, X, Search, Check } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
@@ -9,6 +9,7 @@ import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
 import { FulfillmentMethodModal } from "@/components/pos/fulfillment-method-modal";
+import { FulfillmentDetailsModal } from "@/components/pos-retail/fulfillment-details-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
 import { ChargeScreen } from "@/components/pos/charge-screen";
@@ -20,7 +21,12 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { CartItem, MenuItem, ComboSlot, ComboSlotSelection, ComboDefinition, NavItem, MenuId } from "@/lib/pos-types";
-import { POS_ORDER_FULFILLMENTS } from "@/lib/pos-types";
+import {
+  POS_ORDER_FULFILLMENTS,
+  createEmptyRetailFulfillmentDetails,
+} from "@/lib/pos-types";
+import { formatRetailOrderFulfillmentSummary } from "@/lib/retail-fulfillment-summary";
+import { orderFulfillmentNeedsDetailsModal } from "@/lib/order-fulfillment-details";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -114,6 +120,11 @@ export function POSScreenQSR() {
   const [editDraftNestedModifierSelections, setEditDraftNestedModifierSelections] = useState<Record<string, string[]>>({});
   const [orderFulfillment, setOrderFulfillment] = useState("for-here");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
+  const [fulfillmentDetailsModalOpen, setFulfillmentDetailsModalOpen] =
+    useState(false);
+  const [fulfillmentDetails, setFulfillmentDetails] = useState(
+    createEmptyRetailFulfillmentDetails
+  );
   /** When set, left panel shows slot-detail view (combo name > slot item) for this slot. */
   const [editingComboSlotId, setEditingComboSlotId] = useState<string | null>(null);
   /** When set, left panel shows nested modifier detail (item/slot > option) for this modifier option. */
@@ -134,6 +145,31 @@ export function POSScreenQSR() {
   const [toastVisible, setToastVisible] = useState(false);
   const toastRafRef = useRef<number | null>(null);
   const isEditingMode = editingItemId != null;
+
+  const orderFulfillmentSummaryText = useMemo(
+    () =>
+      formatRetailOrderFulfillmentSummary(
+        orderFulfillment,
+        fulfillmentDetails,
+        null
+      ),
+    [orderFulfillment, fulfillmentDetails]
+  );
+
+  const handleOrderFulfillmentSelect = useCallback((id: string) => {
+    setOrderFulfillment(id);
+    if (orderFulfillmentNeedsDetailsModal(id)) {
+      setFulfillmentDetailsModalOpen(true);
+    }
+  }, []);
+
+  const openFulfillmentFromCartRow = useCallback(() => {
+    if (orderFulfillmentNeedsDetailsModal(orderFulfillment)) {
+      setFulfillmentDetailsModalOpen(true);
+    } else {
+      setFulfillmentModalOpen(true);
+    }
+  }, [orderFulfillment]);
 
   // Menu switcher: which menu is shown in the grid (Lunch = QSR data, Dinner = FSR data).
   const [activeMenuId, setActiveMenuId] = useState<MenuId>("lunch");
@@ -903,10 +939,15 @@ export function POSScreenQSR() {
                     ? POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? orderFulfillment
                     : undefined
                 }
-                onFulfillmentHeaderClick={
-                  orderFulfillment !== "for-here" ? () => setFulfillmentModalOpen(true) : undefined
+                orderFulfillmentDetailsSummary={
+                  orderFulfillment === "for-here"
+                    ? undefined
+                    : orderFulfillmentSummaryText || undefined
                 }
+                onFulfillmentHeaderClick={openFulfillmentFromCartRow}
+                onFulfillmentAddDetailsClick={openFulfillmentFromCartRow}
                 onFulfillmentClick={() => setFulfillmentModalOpen(true)}
+                isDefaultFulfillment={orderFulfillment === "for-here"}
                 getMenuItemById={getMenuItemByIdResolved}
                 getComboDefinition={getComboDefinition}
               />
@@ -917,8 +958,24 @@ export function POSScreenQSR() {
             open={fulfillmentModalOpen}
             onOpenChange={setFulfillmentModalOpen}
             selectedId={orderFulfillment}
-            onSelect={setOrderFulfillment}
+            onSelect={handleOrderFulfillmentSelect}
             options={POS_ORDER_FULFILLMENTS}
+          />
+
+          <FulfillmentDetailsModal
+            open={fulfillmentDetailsModalOpen}
+            onOpenChange={setFulfillmentDetailsModalOpen}
+            fulfillmentId={orderFulfillment}
+            fulfillmentLabel={
+              POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)
+                ?.label ?? "Fulfillment"
+            }
+            details={fulfillmentDetails}
+            onSave={setFulfillmentDetails}
+            onBackToFulfillmentMethod={() => {
+              setFulfillmentDetailsModalOpen(false);
+              setFulfillmentModalOpen(true);
+            }}
           />
 
           {showChargeScreen && (

@@ -43,12 +43,20 @@ interface CartSectionProps {
   accessories?: React.ReactNode;
   /** Order-level fulfillment label (e.g. "In store"); when set with onFulfillmentHeaderClick, shows fulfillment header above cart items. */
   orderFulfillmentLabel?: string;
-  /** Called when the fulfillment header is clicked to open fulfillment selection modal. */
+  /** Second line under the method (e.g. name, phone, address); truncated. Retail / callers with saved details. */
+  orderFulfillmentDetailsSummary?: string;
+  /** Called when the fulfillment label is clicked to open fulfillment selection modal. */
   onFulfillmentHeaderClick?: () => void;
+  /** When set, "Add details" is shown (non-default fulfillment) and calls this instead of opening the method picker. */
+  onFulfillmentAddDetailsClick?: () => void;
   /** When true, the fulfillment header is in its "default" state (e.g. "For here" / "In store") — hides "Add details" and hides the empty-cart card. */
   isDefaultFulfillment?: boolean;
   /** Called when "Fulfillment" is clicked in the actions menu (e.g. open fulfillment method modal). */
   onFulfillmentClick?: () => void;
+  /** Retail: actions menu shows only discount, service charge, and clear cart. */
+  cartActionsVariant?: "default" | "retail";
+  onCartActionsAddDiscount?: () => void;
+  onCartActionsAddServiceCharge?: () => void;
 }
 
 export function CartSection({
@@ -81,9 +89,14 @@ export function CartSection({
   onVoiceToggle,
   accessories,
   orderFulfillmentLabel,
+  orderFulfillmentDetailsSummary,
   onFulfillmentHeaderClick,
+  onFulfillmentAddDetailsClick,
   onFulfillmentClick,
   isDefaultFulfillment,
+  cartActionsVariant = "default",
+  onCartActionsAddDiscount,
+  onCartActionsAddServiceCharge,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -92,30 +105,44 @@ export function CartSection({
   const showFulfillmentHeader =
     orderFulfillmentLabel != null && onFulfillmentHeaderClick != null;
 
-  /** Fulfillment header row (Figma: "Pickup" left, "Add details" underlined right). */
+  const hasFulfillmentDetails = Boolean(
+    orderFulfillmentDetailsSummary?.trim(),
+  );
+
+  const openFulfillmentRow = () => {
+    (onFulfillmentAddDetailsClick ?? onFulfillmentHeaderClick)?.();
+  };
+
+  const fulfillmentRowAriaLabel = orderFulfillmentDetailsSummary?.trim()
+    ? `Fulfillment: ${orderFulfillmentLabel}. ${orderFulfillmentDetailsSummary.trim()}. Edit details.`
+    : `Fulfillment: ${orderFulfillmentLabel}. Add or edit details.`;
+
+  /** Fulfillment header: one tappable row (details / method from parent); optional "Add details" when summary empty. */
   const fulfillmentHeaderRow = showFulfillmentHeader ? (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onFulfillmentHeaderClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onFulfillmentHeaderClick?.();
-        }
-      }}
-      className={`flex w-full cursor-pointer items-center justify-between px-4 pt-3 min-h-[40px] ${items.length === 0 ? "pb-3" : "pb-2"}`}
-      aria-label={`Fulfillment: ${orderFulfillmentLabel}. Select to change.`}
+    <button
+      type="button"
+      onClick={openFulfillmentRow}
+      className={`flex w-full items-center justify-between gap-3 px-4 pt-3 min-h-[40px] border-0 bg-transparent text-left outline-none active:opacity-70 ${items.length === 0 ? "pb-3" : "pb-2"}`}
+      aria-label={fulfillmentRowAriaLabel}
     >
-      <span className="text-[14px] font-medium text-[#666666]">
-        {orderFulfillmentLabel}
-      </span>
-      {!isDefaultFulfillment && (
-        <span className="text-[14px] font-medium text-[#101010] underline">
+      <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+        <span className="block w-full min-w-0 truncate text-[14px] font-medium leading-5 text-[rgba(102,102,102,1)]">
+          {orderFulfillmentLabel}
+        </span>
+        {orderFulfillmentDetailsSummary ? (
+          <span className="block w-full min-w-0 truncate text-[13px] font-normal leading-[18px] text-[rgba(102,102,102,1)]">
+            {orderFulfillmentDetailsSummary}
+          </span>
+        ) : null}
+      </div>
+      {!isDefaultFulfillment &&
+      onFulfillmentHeaderClick &&
+      !hasFulfillmentDetails ? (
+        <span className="shrink-0 text-[14px] font-medium text-[#101010] underline">
           Add details
         </span>
-      )}
-    </div>
+      ) : null}
+    </button>
   ) : null;
 
   if (items.length === 0) {
@@ -153,6 +180,9 @@ export function CartSection({
           onOpenChange={setActionsOpen}
           onClearCart={onClearCart}
           onFulfillmentClick={onFulfillmentClick}
+          variant={cartActionsVariant}
+          onAddDiscount={onCartActionsAddDiscount}
+          onAddServiceCharge={onCartActionsAddServiceCharge}
         />
       </div>
     );
@@ -234,6 +264,9 @@ export function CartSection({
         onOpenChange={setActionsOpen}
         onClearCart={onClearCart}
         onFulfillmentClick={onFulfillmentClick}
+        variant={cartActionsVariant}
+        onAddDiscount={onCartActionsAddDiscount}
+        onAddServiceCharge={onCartActionsAddServiceCharge}
       />
     </div>
   );

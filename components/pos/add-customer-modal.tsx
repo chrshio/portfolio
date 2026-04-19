@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import type { Customer } from "@/lib/pos-types";
 import {
@@ -70,9 +71,9 @@ export function AddCustomerModal({
           >
             <X className="h-6 w-6 text-[#101010]" />
           </button>
-          <h2 className="flex-1 text-center font-semibold text-[19px] leading-[26px] text-[#101010]">
+          <DialogTitle className="flex-1 text-center text-[19px] font-semibold leading-[26px] text-[#101010]">
             Add customer
-          </h2>
+          </DialogTitle>
           <button
             type="button"
             className="rounded-full bg-[#f0f0f0] px-5 py-3 font-medium text-[16px] leading-6 text-[#101010] active:bg-[#e5e5e5]"

@@ -5,7 +5,7 @@
  * Shared UI lives under @/components/pos/*.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
 import { MenuGrid } from "@/components/pos/menu-grid";
@@ -13,11 +13,17 @@ import { ItemEditPanel, type DraftItemOptions } from "@/components/pos/item-edit
 import { ItemAddPanel } from "@/components/pos/item-add-panel";
 import { CartSection } from "@/components/pos/cart-section";
 import { FulfillmentMethodModal } from "@/components/pos/fulfillment-method-modal";
+import { FulfillmentDetailsModal } from "@/components/pos-retail/fulfillment-details-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
 import { ChargeScreen } from "@/components/pos/charge-screen";
 import type { CartItem, MenuItem, NavItem } from "@/lib/pos-types";
-import { POS_ORDER_FULFILLMENTS } from "@/lib/pos-types";
+import {
+  POS_ORDER_FULFILLMENTS,
+  createEmptyRetailFulfillmentDetails,
+} from "@/lib/pos-types";
+import { formatRetailOrderFulfillmentSummary } from "@/lib/retail-fulfillment-summary";
+import { orderFulfillmentNeedsDetailsModal } from "@/lib/order-fulfillment-details";
 import {
   itemRequiresSelection,
   getDefaultModifiers,
@@ -133,8 +139,38 @@ export function POSScreenDeferredModifiersOff() {
 
   const [orderFulfillment, setOrderFulfillment] = useState("for-here");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
+  const [fulfillmentDetailsModalOpen, setFulfillmentDetailsModalOpen] =
+    useState(false);
+  const [fulfillmentDetails, setFulfillmentDetails] = useState(
+    createEmptyRetailFulfillmentDetails
+  );
 
   const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
+
+  const orderFulfillmentSummaryText = useMemo(
+    () =>
+      formatRetailOrderFulfillmentSummary(
+        orderFulfillment,
+        fulfillmentDetails,
+        null
+      ),
+    [orderFulfillment, fulfillmentDetails]
+  );
+
+  const handleOrderFulfillmentSelect = useCallback((id: string) => {
+    setOrderFulfillment(id);
+    if (orderFulfillmentNeedsDetailsModal(id)) {
+      setFulfillmentDetailsModalOpen(true);
+    }
+  }, []);
+
+  const openFulfillmentFromCartRow = useCallback(() => {
+    if (orderFulfillmentNeedsDetailsModal(orderFulfillment)) {
+      setFulfillmentDetailsModalOpen(true);
+    } else {
+      setFulfillmentModalOpen(true);
+    }
+  }, [orderFulfillment]);
 
   // Slide-in animation for the toast.
   const activeToast = addToastMessage ?? updateToastMessage;
@@ -631,10 +667,15 @@ export function POSScreenDeferredModifiersOff() {
                     ? POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? orderFulfillment
                     : undefined
                 }
-                onFulfillmentHeaderClick={
-                  orderFulfillment !== "for-here" ? () => setFulfillmentModalOpen(true) : undefined
+                orderFulfillmentDetailsSummary={
+                  orderFulfillment === "for-here"
+                    ? undefined
+                    : orderFulfillmentSummaryText || undefined
                 }
+                onFulfillmentHeaderClick={openFulfillmentFromCartRow}
+                onFulfillmentAddDetailsClick={openFulfillmentFromCartRow}
                 onFulfillmentClick={() => setFulfillmentModalOpen(true)}
+                isDefaultFulfillment={orderFulfillment === "for-here"}
               />
             </div>
           </div>
@@ -643,8 +684,24 @@ export function POSScreenDeferredModifiersOff() {
             open={fulfillmentModalOpen}
             onOpenChange={setFulfillmentModalOpen}
             selectedId={orderFulfillment}
-            onSelect={setOrderFulfillment}
+            onSelect={handleOrderFulfillmentSelect}
             options={POS_ORDER_FULFILLMENTS}
+          />
+
+          <FulfillmentDetailsModal
+            open={fulfillmentDetailsModalOpen}
+            onOpenChange={setFulfillmentDetailsModalOpen}
+            fulfillmentId={orderFulfillment}
+            fulfillmentLabel={
+              POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)
+                ?.label ?? "Fulfillment"
+            }
+            details={fulfillmentDetails}
+            onSave={setFulfillmentDetails}
+            onBackToFulfillmentMethod={() => {
+              setFulfillmentDetailsModalOpen(false);
+              setFulfillmentModalOpen(true);
+            }}
           />
 
           {showChargeScreen && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { StatusBar } from "@/components/pos/status-bar";
 import { MenuGridRetail } from "@/components/pos-retail/menu-grid";
@@ -10,6 +10,7 @@ import { CartSection } from "@/components/pos/cart-section";
 import { CartAccessoryCustomer } from "@/components/pos/cart-accessory-customer";
 import { AddCustomerModal } from "@/components/pos/add-customer-modal";
 import { FulfillmentMethodModal } from "@/components/pos-retail/fulfillment-method-modal";
+import { FulfillmentDetailsModal } from "@/components/pos-retail/fulfillment-details-modal";
 import { BottomNavigation } from "@/components/pos/bottom-navigation";
 import { SettingsPage } from "@/components/pos/settings-page";
 import { ChargeScreen } from "@/components/pos/charge-screen";
@@ -19,6 +20,7 @@ import {
   type MenuItem,
   type NavItem,
   RETAIL_ORDER_FULFILLMENTS,
+  createEmptyRetailFulfillmentDetails,
 } from "@/lib/pos-types";
 import {
   itemRequiresSelection,
@@ -27,6 +29,8 @@ import {
 } from "@/lib/modifiers";
 import { cartHasIncompleteItems } from "@/lib/cart-validation";
 import { getMenuItemByIdRetail, favoritesItems } from "@/lib/menu-library-retail";
+import { formatRetailOrderFulfillmentSummary } from "@/lib/retail-fulfillment-summary";
+import { orderFulfillmentNeedsDetailsModal } from "@/lib/order-fulfillment-details";
 
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
@@ -77,6 +81,37 @@ export function POSScreenRetail({
 
   const [orderFulfillment, setOrderFulfillment] = useState<string>("in-store");
   const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
+  const [fulfillmentDetailsModalOpen, setFulfillmentDetailsModalOpen] =
+    useState(false);
+  const [fulfillmentDetails, setFulfillmentDetails] = useState(
+    createEmptyRetailFulfillmentDetails
+  );
+
+  const handleRetailFulfillmentSelect = useCallback((id: string) => {
+    setOrderFulfillment(id);
+    if (orderFulfillmentNeedsDetailsModal(id)) {
+      setFulfillmentDetailsModalOpen(true);
+    }
+  }, []);
+
+  /** Cart fulfillment row: details modal when method needs details; otherwise method picker. */
+  const openFulfillmentFromCartRow = useCallback(() => {
+    if (orderFulfillmentNeedsDetailsModal(orderFulfillment)) {
+      setFulfillmentDetailsModalOpen(true);
+    } else {
+      setFulfillmentModalOpen(true);
+    }
+  }, [orderFulfillment]);
+
+  const retailFulfillmentSummaryText = useMemo(
+    () =>
+      formatRetailOrderFulfillmentSummary(
+        orderFulfillment,
+        fulfillmentDetails,
+        cartCustomer
+      ),
+    [orderFulfillment, fulfillmentDetails, cartCustomer]
+  );
 
   const activeToast = addToastMessage ?? updateToastMessage;
   const [toastVisible, setToastVisible] = useState(false);
@@ -464,6 +499,7 @@ export function POSScreenRetail({
 
             <div className="w-[320px] flex-shrink-0">
               <CartSection
+                cartActionsVariant="retail"
                 items={displayItems}
                 subtotal={subtotal}
                 tax={tax}
@@ -492,7 +528,13 @@ export function POSScreenRetail({
                 orderFulfillmentLabel={
                   RETAIL_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? "In store"
                 }
-                onFulfillmentHeaderClick={() => setFulfillmentModalOpen(true)}
+                orderFulfillmentDetailsSummary={
+                  orderFulfillment === "in-store"
+                    ? undefined
+                    : retailFulfillmentSummaryText || undefined
+                }
+                onFulfillmentHeaderClick={openFulfillmentFromCartRow}
+                onFulfillmentAddDetailsClick={openFulfillmentFromCartRow}
                 onFulfillmentClick={() => setFulfillmentModalOpen(true)}
                 isDefaultFulfillment={orderFulfillment === "in-store"}
               />
@@ -540,7 +582,29 @@ export function POSScreenRetail({
         open={fulfillmentModalOpen}
         onOpenChange={setFulfillmentModalOpen}
         selectedId={orderFulfillment}
-        onSelect={setOrderFulfillment}
+        onSelect={handleRetailFulfillmentSelect}
+      />
+
+      <FulfillmentDetailsModal
+        open={fulfillmentDetailsModalOpen}
+        onOpenChange={setFulfillmentDetailsModalOpen}
+        fulfillmentId={orderFulfillment}
+        fulfillmentLabel={
+          RETAIL_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)
+            ?.label ?? "Fulfillment"
+        }
+        details={fulfillmentDetails}
+        onSave={setFulfillmentDetails}
+        onOpenAddCustomer={() => {
+          setFulfillmentDetailsModalOpen(false);
+          setAddCustomerModalOpen(true);
+        }}
+        attachedCustomer={cartCustomer}
+        onRemoveAttachedCustomer={() => setCartCustomer(null)}
+        onBackToFulfillmentMethod={() => {
+          setFulfillmentDetailsModalOpen(false);
+          setFulfillmentModalOpen(true);
+        }}
       />
     </div>
   );

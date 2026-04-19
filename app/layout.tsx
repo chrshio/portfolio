@@ -54,13 +54,15 @@ export const metadata: Metadata = {
   },
 }
 
-// Next.js 16 passes `params` as a Promise; do not destructure or enumerate it.
-// (Cursor's component inspector may trigger "params must be unwrapped" when it enumerates props.)
-export default function RootLayout({
+// Next.js 16 passes `params` as a Promise; await it so devtools / serializers never enumerate it raw.
+export default async function RootLayout({
   children,
+  params,
 }: Readonly<{
   children: React.ReactNode
+  params: Promise<Record<string, string | string[] | undefined>>
 }>) {
+  await params
   return (
     <html lang="en">
       <body className={`${cashSans.variable} ${cashSansMono.variable} font-sans antialiased`}>

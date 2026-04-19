@@ -8,6 +8,7 @@ import {
   Files,
   UtensilsCrossed,
   FilePlus,
+  Tag,
   X,
 } from "lucide-react";
 import {
@@ -32,6 +33,10 @@ interface CartActionsModalProps {
   onClearCart?: () => void;
   /** When provided, clicking "Fulfillment" calls this then closes the actions modal (e.g. open fulfillment method modal). */
   onFulfillmentClick?: () => void;
+  /** Retail POS: only "Add discount", "Add service charge", and "Clear cart". */
+  variant?: "default" | "retail";
+  onAddDiscount?: () => void;
+  onAddServiceCharge?: () => void;
 }
 
 export function CartActionsModal({
@@ -39,16 +44,48 @@ export function CartActionsModal({
   onOpenChange,
   onClearCart,
   onFulfillmentClick,
+  variant = "default",
+  onAddDiscount,
+  onAddServiceCharge,
 }: CartActionsModalProps) {
-  const actions: ActionRow[] = [
-    { id: "clear-cart", label: "Clear cart", icon: XCircle, destructive: true, onClick: onClearCart },
-    { id: "comp-check", label: "Comp check", icon: FileCheck },
-    { id: "void-check", label: "Void check", icon: FileX },
-    { id: "pre-authorize", label: "Pre-authorize", icon: CreditCard },
-    { id: "split-check", label: "Split check", icon: Files },
-    { id: "fulfillment", label: "Fulfillment", icon: UtensilsCrossed, onClick: onFulfillmentClick },
-    { id: "service-charge", label: "Service charge", icon: FilePlus },
-  ];
+  const actions: ActionRow[] =
+    variant === "retail"
+      ? [
+          { id: "add-discount", label: "Add discount", icon: Tag, onClick: onAddDiscount },
+          {
+            id: "add-service-charge",
+            label: "Add service charge",
+            icon: FilePlus,
+            onClick: onAddServiceCharge,
+          },
+          {
+            id: "clear-cart",
+            label: "Clear cart",
+            icon: XCircle,
+            destructive: true,
+            onClick: onClearCart,
+          },
+        ]
+      : [
+          {
+            id: "clear-cart",
+            label: "Clear cart",
+            icon: XCircle,
+            destructive: true,
+            onClick: onClearCart,
+          },
+          { id: "comp-check", label: "Comp check", icon: FileCheck },
+          { id: "void-check", label: "Void check", icon: FileX },
+          { id: "pre-authorize", label: "Pre-authorize", icon: CreditCard },
+          { id: "split-check", label: "Split check", icon: Files },
+          {
+            id: "fulfillment",
+            label: "Fulfillment",
+            icon: UtensilsCrossed,
+            onClick: onFulfillmentClick,
+          },
+          { id: "service-charge", label: "Service charge", icon: FilePlus },
+        ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

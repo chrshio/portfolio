@@ -165,6 +165,53 @@ export const RETAIL_ORDER_FULFILLMENTS: RetailOrderFulfillment[] = [
   { id: "pickup", label: "Pickup" },
 ];
 
+/** Extra fields for retail order fulfillment (pickup / shipment). */
+export interface RetailFulfillmentPickupDetails {
+  phone: string;
+  firstName: string;
+  lastName: string;
+  guestIdentifier: string;
+  note: string;
+}
+
+export interface RetailFulfillmentShipmentDetails {
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
+  phone: string;
+  note: string;
+}
+
+export interface RetailOrderFulfillmentDetails {
+  pickup: RetailFulfillmentPickupDetails;
+  shipment: RetailFulfillmentShipmentDetails;
+}
+
+export function createEmptyRetailFulfillmentDetails(): RetailOrderFulfillmentDetails {
+  return {
+    pickup: {
+      phone: "",
+      firstName: "",
+      lastName: "",
+      guestIdentifier: "",
+      note: "",
+    },
+    shipment: {
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      region: "",
+      postalCode: "",
+      country: "",
+      phone: "",
+      note: "",
+    },
+  };
+}
+
 // --- Order-level fulfillments (non-retail POS: Standard, Variant A, Voice, QSR, FSR) ---
 
 export const POS_ORDER_FULFILLMENTS: RetailOrderFulfillment[] = [

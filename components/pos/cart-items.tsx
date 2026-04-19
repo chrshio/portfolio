@@ -162,8 +162,7 @@ function CartItemRow({
     <div
       ref={containerRef}
       className={cn(
-        "relative w-full rounded-2xl border-[3px] overflow-hidden",
-        isEditing || isDraft ? "border-[#101010]" : "border-transparent",
+        "relative w-full overflow-hidden rounded-xl",
         isFaded ? "opacity-40" : "opacity-100"
       )}
     >
@@ -193,7 +192,7 @@ function CartItemRow({
       )}
 
       {/* Clipping wrapper so white content fills corners and no red bleeds through */}
-      <div className="overflow-hidden rounded-2xl pointer-events-none">
+      <div className="overflow-hidden rounded-xl pointer-events-none">
         <div
           style={{
             transform: `translateX(${translateX}px)`,
@@ -604,6 +603,13 @@ function CartItemRow({
         })()}
       </div>
       </div>
+      {/* Real 3px border on an overlay so it does not shrink the white row (border-box border would). */}
+      {(isEditing || isDraft) && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] rounded-xl border-[3px] border-[#101010]"
+          aria-hidden
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ export interface TextFieldProps extends Omit<React.ComponentProps<"input">, "cla
   label?: string;
   /** Optional start adornment (e.g. Search icon). */
   startAdornment?: React.ReactNode;
+  /** Optional end adornment (e.g. chevron). */
+  endAdornment?: React.ReactNode;
   /** Used only when no label is provided. */
   placeholder?: string;
   wrapperClassName?: string;
@@ -21,6 +23,7 @@ export interface TextFieldProps extends Omit<React.ComponentProps<"input">, "cla
 function TextField({
   label,
   startAdornment,
+  endAdornment,
   wrapperClassName,
   inputClassName,
   id: idProp,
@@ -28,6 +31,7 @@ function TextField({
   onFocus,
   onBlur,
   placeholder,
+  type = "text",
   ...inputProps
 }: TextFieldProps) {
   const id = React.useId();
@@ -62,7 +66,7 @@ function TextField({
         )}
         <input
           id={inputId}
-          type="text"
+          type={type}
           value={value}
           onFocus={(e) => {
             setFocused(true);
@@ -83,8 +87,87 @@ function TextField({
           {...inputProps}
         />
       </div>
+      {endAdornment != null ? (
+        <div className="shrink-0 self-center">{endAdornment}</div>
+      ) : null}
     </div>
   );
 }
 
-export { TextField };
+export interface TextAreaFieldProps
+  extends Omit<React.ComponentProps<"textarea">, "className"> {
+  label?: string;
+  placeholder?: string;
+  wrapperClassName?: string;
+  inputClassName?: string;
+}
+
+/** Multiline variant: same floating-label rules as {@link TextField}. */
+function TextAreaField({
+  label,
+  wrapperClassName,
+  inputClassName,
+  id: idProp,
+  value,
+  onFocus,
+  onBlur,
+  placeholder,
+  rows = 4,
+  ...textareaProps
+}: TextAreaFieldProps) {
+  const id = React.useId();
+  const inputId = idProp ?? id;
+  const [focused, setFocused] = useState(false);
+  const hasValue = value != null && String(value).trim() !== "";
+  const showLabelAbove = focused || hasValue;
+  const effectivePlaceholder = showLabelAbove
+    ? undefined
+    : (label != null ? label : (placeholder ?? ""));
+
+  return (
+    <div
+      className={cn(
+        "group flex w-full min-h-[120px] flex-col gap-0 rounded-[8px] border border-[#dadada] px-4 py-3 transition-[border-color,padding]",
+        "focus-within:border-[#101010] focus-within:border-2",
+        showLabelAbove && label != null ? "py-2" : "py-3",
+        wrapperClassName
+      )}
+    >
+      {label != null && (
+        <label
+          htmlFor={inputId}
+          className={cn(
+            "text-[14px] font-medium leading-[22px] text-[#101010] shrink-0 transition-opacity",
+            showLabelAbove ? "opacity-100" : "opacity-0 h-0 overflow-hidden pointer-events-none"
+          )}
+        >
+          {label}
+        </label>
+      )}
+      <textarea
+        id={inputId}
+        rows={rows}
+        value={value}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
+        placeholder={effectivePlaceholder}
+        data-slot="text-area-field-input"
+        className={cn(
+          "min-h-[88px] w-full min-w-0 flex-1 resize-none bg-transparent text-[16px] leading-[24px] text-[#101010]",
+          "placeholder:text-[#666] outline-none border-0 p-0",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          inputClassName
+        )}
+        {...textareaProps}
+      />
+    </div>
+  );
+}
+
+export { TextField, TextAreaField };
