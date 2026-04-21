@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { CartHeader } from "./cart-header";
 import { CartItems } from "./cart-items";
 import { PricingSummary } from "./pricing-summary";
@@ -99,6 +99,11 @@ export function CartSection({
   onCartActionsAddServiceCharge,
 }: CartSectionProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
+  const cartScrollRef = useRef<HTMLDivElement>(null);
+  const prevCartTailRef = useRef<{ len: number; lastId: string | null }>({
+    len: 0,
+    lastId: null,
+  });
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const isEditMode = editingItemId != null;
   const moreDisabled = isEditMode || !!isAddMode;
@@ -116,6 +121,20 @@ export function CartSection({
   const fulfillmentRowAriaLabel = orderFulfillmentDetailsSummary?.trim()
     ? `Fulfillment: ${orderFulfillmentLabel}. ${orderFulfillmentDetailsSummary.trim()}. Edit details.`
     : `Fulfillment: ${orderFulfillmentLabel}. Add or edit details.`;
+
+  useLayoutEffect(() => {
+    const len = items.length;
+    const lastId = len > 0 ? items[len - 1]!.id : null;
+    const prev = prevCartTailRef.current;
+    const appendedNewLastLine =
+      len > prev.len && lastId != null && lastId !== prev.lastId;
+    prevCartTailRef.current = { len, lastId };
+
+    if (!appendedNewLastLine) return;
+    const el = cartScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+  }, [items]);
 
   /** Fulfillment header: one tappable row (details / method from parent); optional "Add details" when summary empty. */
   const fulfillmentHeaderRow = showFulfillmentHeader ? (
@@ -149,7 +168,10 @@ export function CartSection({
     return (
       <div className="flex flex-col h-full bg-white pr-6">
         <CartHeader itemCount={0} onMoreClick={() => setActionsOpen(true)} />
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div
+          ref={cartScrollRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+        >
           <div className="flex flex-col gap-4">
             {accessories && (
               <div className="flex flex-col gap-4">
@@ -196,7 +218,10 @@ export function CartSection({
         onMoreClick={moreDisabled ? undefined : () => setActionsOpen(true)}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div
+        ref={cartScrollRef}
+        className="flex-1 min-h-0 overflow-y-auto"
+      >
         <div className="flex flex-col gap-4">
           {accessories && (
             <div className="flex flex-col gap-4">

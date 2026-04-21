@@ -24,6 +24,7 @@ export function BrowserMock({ children, fillContainer = false }: BrowserMockProp
         {/* Browser window - 1440px width; when fillContainer, flex-1 so it fills to 64px from bottom */}
         <div
           className={`relative flex w-[1440px] max-w-full flex-col overflow-hidden rounded-2xl border border-[#333] border-b-0 bg-[#e8e8e8] shadow-2xl ${fillContainer ? "min-h-0 flex-1" : ""}`}
+          data-prototype-device-bounds
           style={
             fillContainer
               ? undefined

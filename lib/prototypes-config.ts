@@ -38,4 +38,11 @@ export const projects: ProjectItem[] = [
       { id: "web", name: "Dashboard", path: "/prototypes/printer-routing/web", ready: true },
     ],
   },
+  {
+    id: "buyer-vision",
+    name: "Buyer vision",
+    prototypes: [
+      { id: "pair", name: "POS + buyer display", path: "/prototypes/buyer-vision", ready: true },
+    ],
+  },
 ];

@@ -7,6 +7,10 @@ import { projects, type PrototypeItem } from "@/lib/prototypes-config";
 
 const VARIANT_SELECTOR_MIN_HEIGHT = 950;
 
+function rectsOverlap(a: DOMRect, b: DOMRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
 function variantShortLabel(item: PrototypeItem): string {
   const map: Record<string, string> = {
     cafe: "Standard",
@@ -35,6 +39,8 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
   const [leftPillStyle, setLeftPillStyle] = useState<{ top: number; height: number; left: number; width: number } | null>(null);
   const [leftHoverIndex, setLeftHoverIndex] = useState<number | null>(null);
   const [leftHoverPillStyle, setLeftHoverPillStyle] = useState<{ top: number; height: number; left: number; width: number } | null>(null);
+  const prototypeContentRef = useRef<HTMLDivElement | null>(null);
+  const [leftPanelCoversPrototype, setLeftPanelCoversPrototype] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia(`(min-height: ${VARIANT_SELECTOR_MIN_HEIGHT}px)`);
     const handleChange = (e: MediaQueryListEvent) => setShowVariantSelector(e.matches);
@@ -146,6 +152,52 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
     });
   }, [leftHoverIndex]);
 
+  useLayoutEffect(() => {
+    const content = prototypeContentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+
+    let debounceId: ReturnType<typeof setTimeout> | undefined;
+
+    const runCheck = () => {
+      const panel = leftPanelRef.current;
+      if (!panel) {
+        setLeftPanelCoversPrototype(false);
+        return;
+      }
+      const marker = content.querySelector("[data-prototype-device-bounds]");
+      if (!marker || !(marker instanceof HTMLElement)) {
+        setLeftPanelCoversPrototype(false);
+        return;
+      }
+      setLeftPanelCoversPrototype(rectsOverlap(panel.getBoundingClientRect(), marker.getBoundingClientRect()));
+    };
+
+    const scheduleCheck = () => {
+      clearTimeout(debounceId);
+      debounceId = setTimeout(runCheck, 32);
+    };
+
+    const ro = new ResizeObserver(scheduleCheck);
+    ro.observe(content);
+
+    const mo = new MutationObserver(scheduleCheck);
+    mo.observe(content, { subtree: true, childList: true });
+
+    window.addEventListener("resize", scheduleCheck);
+    scheduleCheck();
+    const t1 = window.setTimeout(runCheck, 100);
+    const t2 = window.setTimeout(runCheck, 350);
+
+    return () => {
+      clearTimeout(debounceId);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", scheduleCheck);
+    };
+  }, [pathname]);
+
   const variantSelectorBar = hasVariantSelector ? (
     <div className="flex w-full min-w-0 justify-center px-4 pt-6 pb-1 -mb-24 z-10 relative sm:px-6 md:px-8">
       {/* Scroll when viewport is narrow; bar grows to fit all pills up to available width */}
@@ -244,7 +296,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
       ) : null}
 
       {/* Content area — z-0 so the left prototype selector (z-40) stays on top when sheets/dialogs open inside children */}
-      <div className="flex-1 min-h-0 relative z-0 overflow-hidden">
+      <div ref={prototypeContentRef} className="flex-1 min-h-0 relative z-0 overflow-hidden">
         {children}
       </div>
 
@@ -255,24 +307,41 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
           "group"
         )}
       >
-        {/* Trigger zone at left edge – hover to reveal panel on narrow screens; only this strip receives events when panel is hidden */}
+        {/* Trigger zone at left edge — always when panel is overlap-hidden; below 1400px always (narrow UX). */}
         <div
-          className="absolute left-0 top-0 bottom-0 w-5 min-[1400px]:hidden pointer-events-auto"
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-5 pointer-events-auto",
+            !leftPanelCoversPrototype && "min-[1400px]:hidden"
+          )}
           aria-hidden
         />
-        {/* Bridge: when panel is revealed (group-hover), this fills the strip so moving from trigger to panel doesn't lose hover */}
+        {/* Bridge: keeps :group-hover while moving from strip to panel; same wide-screen rule as trigger */}
         <div
-          className="absolute left-0 top-0 bottom-0 w-[220px] min-[1400px]:hidden pointer-events-none max-[1399px]:group-hover:pointer-events-auto"
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-[220px] pointer-events-none",
+            "max-[1399px]:group-hover:pointer-events-auto",
+            leftPanelCoversPrototype && "min-[1400px]:group-hover:pointer-events-auto",
+            !leftPanelCoversPrototype && "min-[1400px]:hidden"
+          )}
           aria-hidden
         />
         <div
           ref={leftPanelRef}
           onMouseLeave={() => setLeftHoverIndex(null)}
           className={cn(
-            "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-fit rounded-[16px] border-[1.4px] border-[rgba(80,80,80,0.22)] overflow-hidden p-1 flex flex-col gap-2",
-            "min-[1400px]:opacity-100 min-[1400px]:pointer-events-auto",
-            "max-[1399px]:opacity-0 max-[1399px]:pointer-events-none max-[1399px]:transition-opacity max-[1399px]:duration-200",
-            "max-[1399px]:group-hover:opacity-100 max-[1399px]:group-hover:pointer-events-auto"
+            "absolute left-6 top-1/2 -translate-y-1/2 z-50 w-fit rounded-[16px] border-[1.4px] border-[rgba(80,80,80,0.22)] overflow-hidden p-1 flex flex-col gap-2 transition-opacity duration-200",
+            leftPanelCoversPrototype
+              ? cn(
+                  "opacity-0 pointer-events-none",
+                  "min-[1400px]:opacity-0 min-[1400px]:pointer-events-none",
+                  "min-[1400px]:group-hover:opacity-100 min-[1400px]:group-hover:pointer-events-auto",
+                  "max-[1399px]:group-hover:opacity-100 max-[1399px]:group-hover:pointer-events-auto"
+                )
+              : cn(
+                  "min-[1400px]:opacity-100 min-[1400px]:pointer-events-auto",
+                  "max-[1399px]:opacity-0 max-[1399px]:pointer-events-none",
+                  "max-[1399px]:group-hover:opacity-100 max-[1399px]:group-hover:pointer-events-auto"
+                )
           )}
         >
           {/* Glass backdrop – frosted blur */}

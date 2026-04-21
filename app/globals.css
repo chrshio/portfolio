@@ -148,6 +148,174 @@
   animation: slide-out-right 0.25s cubic-bezier(0.55, 0, 0.75, 0.05) both;
 }
 
+/* Buyer-facing “Check in”: a tilted phone flies up from outside the screen,
+   taps the bottom of the buyer display, then retreats back out below. */
+@keyframes buyer-checkin-phone-tap {
+  0% {
+    transform: translateY(120%) rotate(18deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(82%) rotate(12deg);
+    opacity: 1;
+  }
+  60% {
+    transform: translateY(82%) rotate(12deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(120%) rotate(18deg);
+    opacity: 0;
+  }
+}
+.animate-buyer-checkin-phone-tap {
+  animation: buyer-checkin-phone-tap 1.1s cubic-bezier(0.45, 0, 0.35, 1) both;
+}
+
+/* Buyer check-in: welcome screen fades out before the new screen enters */
+@keyframes buyer-welcome-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.animate-buyer-welcome-fade-out {
+  animation: buyer-welcome-fade-out 0.4s ease both;
+}
+
+/* Buyer check-in: drink card slides up from outside the bottom of the screen */
+@keyframes buyer-checkin-card-enter {
+  from {
+    transform: translateY(105%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-buyer-checkin-card-enter {
+  animation: buyer-checkin-card-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Buyer check-in: left text and arrow fade + subtle rise */
+@keyframes buyer-checkin-text-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-buyer-checkin-text-enter {
+  animation: buyer-checkin-text-enter 0.5s ease both 0.1s;
+}
+
+/* Buyer check-in: rotating sunburst behind the free-drink photo */
+@keyframes buyer-checkin-starburst-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-buyer-checkin-starburst {
+  animation: buyer-checkin-starburst-spin 24s linear infinite;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* Buyer check-in: drink card slides off toward the top on exit. */
+@keyframes buyer-checkin-card-exit {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-130%);
+    opacity: 0;
+  }
+}
+.animate-buyer-checkin-card-exit {
+  animation: buyer-checkin-card-exit 0.5s cubic-bezier(0.55, 0, 0.78, 0.14) both;
+}
+
+/* Buyer check-in: left text and right arrow fade out as the card leaves. */
+@keyframes buyer-checkin-text-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.animate-buyer-checkin-text-exit {
+  animation: buyer-checkin-text-exit 0.3s ease both;
+}
+
+/* Profile sidebar + anonymous recommendations column: slide in from the left. */
+@keyframes buyer-column-slide-in-from-left {
+  from {
+    transform: translateX(calc(-100% - 20px));
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.animate-buyer-profile-sidebar-enter {
+  animation: buyer-column-slide-in-from-left 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-buyer-recommendations-slide-in-from-left {
+  animation: buyer-column-slide-in-from-left 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Buyer profile screen: right-side order breakdown + total simply fades in. */
+@keyframes buyer-profile-main-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-buyer-profile-main-enter {
+  animation: buyer-profile-main-enter 0.45s ease both 0.05s;
+}
+
+/* Buyer cart: new row fades in while existing rows are FLIP-animated via JS. */
+@keyframes buyer-order-line-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-buyer-order-line-enter {
+  animation: buyer-order-line-enter 0.28s ease both 0.08s;
+}
+
+/* Buyer cart modifiers: outgoing text fades out in place. */
+@keyframes buyer-order-details-dissolve-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.animate-buyer-order-details-dissolve-out {
+  animation: buyer-order-details-dissolve-out 0.22s ease both;
+}
+
+/* Buyer cart modifiers: incoming text fades in. */
+@keyframes buyer-order-details-dissolve-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-buyer-order-details-dissolve-in {
+  animation: buyer-order-details-dissolve-in 0.26s ease both 0.1s;
+}
+
 /* Text link pattern: black with slightly more font weight (no blue) */
 @layer components {
   .text-link {

@@ -7,12 +7,13 @@ import { MenuGrid } from "./menu-grid";
 import { ItemEditPanel, type DraftItemOptions } from "./item-edit-panel";
 import { ItemAddPanel } from "./item-add-panel";
 import { CartSection } from "./cart-section";
+import { CartAccessoryCustomer } from "./cart-accessory-customer";
 import { FulfillmentMethodModal } from "./fulfillment-method-modal";
 import { FulfillmentDetailsModal } from "@/components/pos-retail/fulfillment-details-modal";
 import { BottomNavigation } from "./bottom-navigation";
 import { SettingsPage } from "./settings-page";
 import { ChargeScreen } from "./charge-screen";
-import type { CartItem, MenuItem, NavItem } from "@/lib/pos-types";
+import type { CartItem, Customer, MenuItem, NavItem } from "@/lib/pos-types";
 import {
   POS_ORDER_FULFILLMENTS,
   createEmptyRetailFulfillmentDetails,
@@ -29,7 +30,28 @@ import { cartHasIncompleteItems } from "@/lib/cart-validation";
 const TAX_RATE = 0.05;
 const ADD_DRAFT_ID = "__draft_add__";
 
-export function POSScreen() {
+export type POSScreenProps = {
+  /** When set (e.g. Buyer vision), called when the order lines shown on POS change so a paired display can mirror them. */
+  onBuyerOrderDisplayChange?: (items: CartItem[]) => void;
+  /**
+   * Customer attached to the order (e.g. via the buyer-facing check-in flow).
+   * When set, the cart renders a read-only customer accessory at the top.
+   */
+  attachedCustomer?: Customer | null;
+  /**
+   * Buyer profile “go-to order” upsell: when `buyerBareAddNonce` increments, append
+   * `buyerBareAddMenuItem` with no modifiers. Staff opens the line on the POS when ready.
+   */
+  buyerBareAddNonce?: number;
+  buyerBareAddMenuItem?: MenuItem | null;
+};
+
+export function POSScreen({
+  onBuyerOrderDisplayChange,
+  attachedCustomer,
+  buyerBareAddNonce = 0,
+  buyerBareAddMenuItem = null,
+}: POSScreenProps = {}) {
   const [activeTab, setActiveTab] = useState<NavItem>("checkout");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
@@ -70,6 +92,37 @@ export function POSScreen() {
   );
 
   const [updateToastMessage, setUpdateToastMessage] = useState<string | null>(null);
+
+  const lastBuyerBareAddNonceRef = useRef(0);
+
+  // Buyer-facing upsell: append an incomplete line only (no editor focus / tab change).
+  useEffect(() => {
+    const n = buyerBareAddNonce ?? 0;
+    const menuItem = buyerBareAddMenuItem;
+    if (!menuItem || n <= 0 || n === lastBuyerBareAddNonceRef.current) return;
+    lastBuyerBareAddNonceRef.current = n;
+
+    const uniqueId = `${menuItem.id}-${Date.now()}`;
+    setAddingItem(null);
+    setAddToastMessage(null);
+    setAddScrollSignal(null);
+    setCartItems((prev) => [
+      ...prev,
+      {
+        id: uniqueId,
+        name: menuItem.name,
+        price: menuItem.price,
+        quantity: 1,
+        description: menuItem.description,
+        menuItemId: menuItem.id,
+        modifiers: [],
+        fulfillmentMethod: "for-here",
+        taxes: [],
+        discounts: [],
+        serviceCharges: [],
+      },
+    ]);
+  }, [buyerBareAddNonce, buyerBareAddMenuItem]);
 
   // Slide-in animation for the toast.
   const activeToast = addToastMessage ?? updateToastMessage;
@@ -157,6 +210,20 @@ export function POSScreen() {
     : draftCartItem
       ? [...cartItems, draftCartItem]
       : cartItems;
+
+  const prevBuyerOrderSyncKeyRef = useRef<string>("");
+  useEffect(() => {
+    if (!onBuyerOrderDisplayChange) return;
+    // Only push committed cart items — not add-panel drafts or live edit drafts.
+    // The buyer display updates when staff clicks "Add" or auto-saves by
+    // switching to another item, not while they are still configuring.
+    const key = cartItems
+      .map((i) => `${i.id}:${i.quantity}:${i.name}:${i.price}:${(i.modifiers ?? []).join(",")}`)
+      .join("|");
+    if (key === prevBuyerOrderSyncKeyRef.current) return;
+    prevBuyerOrderSyncKeyRef.current = key;
+    onBuyerOrderDisplayChange(cartItems);
+  }, [cartItems, onBuyerOrderDisplayChange]);
 
   const subtotal = displayItems.reduce(
     (sum, item) =>
@@ -481,6 +548,11 @@ export function POSScreen() {
                 onAdd={handleAddAttempt}
                 onRemoveItem={handleRemoveCartItem}
                 onClearCart={handleClearCart}
+                accessories={
+                  attachedCustomer ? (
+                    <CartAccessoryCustomer customer={attachedCustomer} />
+                  ) : undefined
+                }
                 orderFulfillmentLabel={
                   orderFulfillment !== "for-here"
                     ? POS_ORDER_FULFILLMENTS.find((f) => f.id === orderFulfillment)?.label ?? orderFulfillment

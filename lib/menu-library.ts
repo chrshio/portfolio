@@ -42,7 +42,23 @@ export const merchItems: MenuItem[] = [
 
 // Bakery items (cream/yellow background)
 export const bakeryItems: MenuItem[] = [
-  { id: 'croissant', name: 'Croissant', price: 4.50, type: 'item', category: 'bakery' },
+  {
+    id: 'croissant',
+    name: 'Croissant',
+    price: 4.50,
+    type: 'item',
+    category: 'bakery',
+    image: '/croissant.png',
+  },
+  {
+    id: 'pumpkin-loaf',
+    name: 'Pumpkin Loaf',
+    price: 5.25,
+    type: 'item',
+    category: 'bakery',
+    image: '/pumpkin-loaf.png',
+    description: 'Spiced pumpkin loaf — dense, moist, and lightly sweet.',
+  },
   { id: 'cookie', name: 'Cookie', price: 3.50, type: 'item', category: 'bakery' },
   { id: 'granola', name: 'Granola', price: 5.00, type: 'item', category: 'bakery' },
   { id: 'baguette', name: 'Baguette', price: 4.00, type: 'item', category: 'bakery' },
