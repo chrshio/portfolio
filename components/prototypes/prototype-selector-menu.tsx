@@ -267,7 +267,7 @@ export function PrototypeSelectorMenu({ children }: { children: React.ReactNode 
         Design prototypes generated with AI. <br />
         For the portfolio walkthrough, go{" "}
         <a
-          href="https://www.figma.com/deck/Z93Kg5O9XsrqamdSS9Em6I"
+          href="https://www.figma.com/deck/eSpFUIGdP1YenZXxfCK6PP"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-white/60"

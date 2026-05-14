@@ -55,7 +55,7 @@ export function LandingPage() {
             <div className="mb-10 max-w-md text-[14px] font-normal leading-normal">
               </div>
               <Link
-              href="https://www.figma.com/deck/Z93Kg5O9XsrqamdSS9Em6I"
+              href="https://www.figma.com/deck/eSpFUIGdP1YenZXxfCK6PP"
               target="_blank"
               rel="noopener noreferrer"
               className="block underline"
